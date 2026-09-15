@@ -6,9 +6,9 @@ import datetime
 
 nlp = spacy.load("en_core_web_sm")
 
-LABEL_MAP = {"ORG":"ORG","PERSON":"PERSON","GPE":"LOCATION","LOC":"LOCATION"}
+LABEL_MAP = {"ORG":"ORG","PERSON":"PERSON","GPE":"LOCATION","LOC":"LOCATION", "LAW":"POLICY"}
 EVENT_TYPE_KEYWORDS = {"raise":"policy_change","rate":"policy_change"}
-
+POLICY_KEYWORDS = {"encryption policy","access control","quantitative easing"}
 
 def full_phrase(token):
     if (token is None):
@@ -54,6 +54,11 @@ def extract_entities(text: str) -> list[Entity]:
             ent_fed = get_id(ent.text+ent.label_)
             e = Entity(id=ent_fed,name=ent.text,type=LABEL_MAP[ent.label_])
             entities.append(e)
+    policy_entities = extract_policy_entities(text)
+    existing_names = {e.name.lower() for e in entities}
+    for en in policy_entities:
+        if en.name.lower() not in existing_names:
+            entities.append(en)
     return entities
 
 
@@ -96,6 +101,17 @@ def extract_topic(text: str) -> Topic:
         if (chunk.root.dep_ == "dobj" or chunk.root.dep_ == "obj"):
             root = chunk.text.lower()
     return Topic(name=root)
+
+def extract_policy_entities(text:str) -> list[Entity]:
+    entities = []
+    for policy in POLICY_KEYWORDS:
+        if policy in text.lower():
+            policy_id = get_id(policy+"POLICY")
+            entities.append(Entity(id=policy_id,name=policy,type="POLICY"))
+    return entities 
+
+            
+    
 
 if __name__ == "__main__":
     pass
