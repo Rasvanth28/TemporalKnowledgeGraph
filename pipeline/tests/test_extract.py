@@ -1,4 +1,4 @@
-from pipeline.extract import extract_entities,extract_event_description,extract_event
+from pipeline.extract import extract_entities,extract_event_description,extract_event,extract_topic
 import datetime
 
 
@@ -20,4 +20,9 @@ def test_extract_event():
     assert event.description == "Federal Reserve raised interest rates"
     assert event.date == datetime.date(2026,3,15)
     assert event.type == "policy_change"
+
+def test_extract_topic():
+    text = "The Federal Reserve raised interest rates in March 2026"
+    topic = extract_topic(text)
+    assert topic.name == "interest rates"
 
