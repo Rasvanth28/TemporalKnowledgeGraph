@@ -26,3 +26,16 @@ def test_extract_topic():
     topic = extract_topic(text)
     assert topic.name == "interest rates"
 
+def test_extract_entities_finds_policy_keyword():
+    text = "The government announced a new access control policy"
+    entities = extract_entities(text)
+    names = [e.name for e in entities]
+    types = [e.type for e in entities]
+    assert "access control" in names
+    assert "POLICY" in types
+
+def test_extract_entities_find_law_as_policy():
+    text = "Congress passed the Affordable Care Act in 2010"
+    entities = extract_entities(text)
+    policy_entities = [e for e in entities if e.type == "POLICY"]
+    assert len(policy_entities) == 1
