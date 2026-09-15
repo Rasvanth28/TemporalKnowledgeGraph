@@ -1,5 +1,5 @@
 import spacy
-from common.schema import Entity, Event
+from common.schema import Entity, Event, Topic
 import uuid
 import dateutil.parser
 import datetime
@@ -88,6 +88,14 @@ def extract_event(text: str, article_date: datetime.date) -> Event:
     id = get_id(desc + str(date))
     return Event(id=id, description=desc, date=date, type=event_type)
 
+
+def extract_topic(text: str) -> Topic:
+    doc = nlp(text)
+    root = "general"
+    for chunk in doc.noun_chunks:
+        if (chunk.root.dep_ == "dobj" or chunk.root.dep_ == "obj"):
+            root = chunk.text.lower()
+    return Topic(name=root)
 
 if __name__ == "__main__":
     pass
