@@ -1,5 +1,5 @@
 import spacy
-from common.schema import Entity, Event, Topic
+from common.schema import Entity, Event, Topic,ExtractionResult,EventLink
 import uuid
 import dateutil.parser
 import datetime
@@ -67,7 +67,10 @@ def extract_event_date(text:str,article_date: datetime.date)-> list[datetime.dat
     date = []
     for ent in doc.ents:
       if ent.label_ == "DATE":
-        date.append(dateutil.parser.parse(ent.text).date())
+        try:
+            date.append(dateutil.parser.parse(ent.text,default=datetime.datetime(1,1,1)).date())
+        except (dateutil.parser.ParserError,ValueError):
+            pass
     if not date:
         return [article_date]
     else:
@@ -110,8 +113,54 @@ def extract_policy_entities(text:str) -> list[Entity]:
             entities.append(Entity(id=policy_id,name=policy,type="POLICY"))
     return entities 
 
-            
-    
+def extract_all(text:str,article_date:datetime.date) -> ExtractionResult:
+    entities = extract_entities(text)
+    event = extract_event(text,article_date)
+    topic = extract_topic(text)
+    return ExtractionResult(entities=entities,event=event,topic=topic)
+
+def get_jaccard_score(a : list[Entity] , b : list[Entity]) -> float:
+    names_a = {e.name.lower() for e in a}
+    names_b = {e.name.lower() for e in b}
+    intersection = names_a & names_b
+    union = names_a | names_b
+    if not union:
+        return 0.0
+    return len(intersection)/len(union)
+
+
+def get_topic_score(a : Topic , b : Topic) -> float:
+    return 1.0 if a.name == b.name else 0.0
+
+def get_date_score(a: datetime.date, b:datetime.date,window_days: int = 30) -> float:
+    days_apart = abs((a-b).days)
+    if days_apart >= window_days:
+        return 0.0
+    return 1.0 - (days_apart/window_days)
+
+def get_confidence(jaccard_score:float,topic_score:float,date_score:float) -> float:
+     return (jaccard_score+topic_score+date_score)/3
+
+def get_reason(jaccard_score : float,topic_score: float, date_score :float) -> str:
+    reasons = []
+    if jaccard_score > 0:
+        reasons.append("shared_entities")
+    if topic_score > 0:
+        reasons.append("same_topic")
+    if date_score > 0.5:
+        reasons.append("date_proximity")
+    return "+".join(reasons) if reasons else "weak_link"
+
+def compute_link(a : ExtractionResult,b:ExtractionResult) -> EventLink:
+   from_event_id = a.event.id
+   to_event_id = b.event.id
+   jaccard_score = get_jaccard_score(a.entities,b.entities)
+   topic_score = get_topic_score(a.topic,b.topic)
+   date_score = get_date_score(a.event.date,b.event.date)
+   confidence = get_confidence(jaccard_score,topic_score,date_score)
+   reason = get_reason(jaccard_score,topic_score,date_score)
+   return EventLink(from_event_id = from_event_id,to_event_id = to_event_id , confidence = confidence , reason = reason);
+
 
 if __name__ == "__main__":
     pass
