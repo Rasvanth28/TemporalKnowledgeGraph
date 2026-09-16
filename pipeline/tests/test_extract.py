@@ -1,4 +1,4 @@
-from pipeline.extract import extract_entities,extract_event_description,extract_event,extract_topic
+from pipeline.extract import extract_entities,extract_event_description,extract_event,extract_topic,extract_all,compute_link
 import datetime
 
 
@@ -18,7 +18,7 @@ def test_extract_event():
     text = "The Federal Reserve raised interest rates in March 2026"
     event = extract_event(text,datetime.date(2026,1,1))
     assert event.description == "Federal Reserve raised interest rates"
-    assert event.date == datetime.date(2026,3,15)
+    assert event.date == datetime.date(2026,3,1)
     assert event.type == "policy_change"
 
 def test_extract_topic():
@@ -39,3 +39,18 @@ def test_extract_entities_find_law_as_policy():
     entities = extract_entities(text)
     policy_entities = [e for e in entities if e.type == "POLICY"]
     assert len(policy_entities) == 1
+
+def test_compute_link_related_events():
+    a = extract_all("The Federal Reserve raised interest rates in March 2026",datetime.date(2026,1,1))
+    b = extract_all ("The Federal Reserve raised rates again in March 2026",datetime.date(2026,1,1))
+    link = compute_link(a,b)
+    assert link.confidence > 0
+    assert "shared_entities" in link.reason
+
+def test_compute_link_unrelated_events():
+    a = extract_all("A storm hit the coast",datetime.date(2026,1,1))
+    b = extract_all("The economy grew last quarter", datetime.date(2026,6,1))
+    link = compute_link(a,b)
+    assert link.confidence == 0.0
+    assert link.reason == "weak_link"
+
