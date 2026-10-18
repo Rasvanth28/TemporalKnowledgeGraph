@@ -21,6 +21,7 @@ class Event:
     description : str
     date : datetime.date
     type : str
+    date_source : str = "explicit" # "explicit" (stated in the text) | "inferred" (article's publication date)
 
 @dataclass
 class Topic:
@@ -34,8 +35,23 @@ class EventLink:
     reason : str
 
 @dataclass
-class ExtractionResult:
-    entities : list[Entity]
+class ExtractedEvent:
+    # One event plus what it INVOLVES and is ABOUT.
+    # source_text is the sentence the event came from (evidence + input for topic similarity).
     event : Event
+    entities : list[Entity]
     topic : Topic
-    eventlinks : list[EventLink] = field(default_factory=list)
+    source_text : str = ""
+
+@dataclass
+class ExtractionResult:
+    # Article DESCRIBES events; Article MENTIONS entities (every entity found in the article).
+    article : Article
+    entities : list[Entity]
+    events : list[ExtractedEvent] = field(default_factory=list)
+
+@dataclass
+class PipelineOutput:
+    # EventLinks are corpus-level: they connect events across articles.
+    results : list[ExtractionResult]
+    links : list[EventLink] = field(default_factory=list)

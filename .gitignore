@@ -64,3 +64,10 @@ Practice
 __pycache__/
 *.pyc
 
+.env
+.pytest_cache/
+
+# Generated pipeline outputs
+data/exports/
+# Fetched Guardian content: their terms don't allow republishing full article text
+data/guardian_*.json
