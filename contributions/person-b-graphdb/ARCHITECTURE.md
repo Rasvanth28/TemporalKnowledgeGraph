@@ -45,8 +45,8 @@ A standalone copy lives in [diagrams/architecture.md](diagrams/architecture.md).
 | `graphdb/queries.py` | **NEW, Stage 3 implemented** | Stable query contract and RMI fallback functions. |
 | `graphdb/normalize.py` | **NEW, Stage 3 implemented** | Standalone copy of Person A's entity-name normalization; no spaCy import. |
 | `graphdb/api.py` | **NEW, Stage 4 implemented** | Thin FastAPI/Pydantic layer; no business logic in routes. Stable routes documented in `contributions/person-b-graphdb/api/API_CONTRACT.md`. |
-| `graphdb/export.py` | **NEW, Stage 5** | Flat event-key export from the graph. |
-| `graphdb/tests/` | **NEW, Stages 1–4 implemented** | Mocked-driver unit tests, FastAPI tests, and `test_`-namespaced integration tests that auto-skip without `NEO4J_URI`. |
+| `graphdb/export.py` | **NEW, Stage 5 implemented** | Flat event-key export from the graph with the stable pipeline column contract. |
+| `graphdb/tests/` | **NEW, Stages 1–6 implemented** | Mocked-driver unit tests, FastAPI/API tests, export tests, and `test_`-namespaced integration tests that auto-skip without `NEO4J_URI`. |
 
 ## 3. Interfaces
 

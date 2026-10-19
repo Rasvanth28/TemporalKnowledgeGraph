@@ -1,49 +1,58 @@
 # Session handoff
 
 - **Last updated:** 2026-10-19
-- **Branch:** `feature/graphdb-api`
-- **Stage:** Stage 4 committed and pushed; PR 4 is ready to open against PR 3.
+- **Branch:** `feature/graphdb-export-e2e`
+- **Stage:** Stages 0–6 implementation complete; live Aura verification pending.
 
 ## Current status
 
-- Stages 0–3 are committed and pushed (foundation, writer, queries).
-- Stage 4 (FastAPI layer, contract docs, Postman/curl examples) is implemented on the stacked API branch.
-- API unit tests pass with an injected fake client.
-- Live API, live query, live index evidence, and Docker Compose are all pending.
-- No Aura `.env` exists.
+- Foundation, writer, queries, API, export, and end-to-end integration tests are implemented.
+- All unit/mocked/API tests pass; all real-Neo4j integration tests skip without `NEO4J_URI`.
+- All five branches are pushed as a stacked PR chain.
+- No Aura `.env`, no live index evidence, no live API/export/e2e result, no Docker Compose run.
 
 ## Last verified state
 
-- Stage 1 commits: `adee66c`, `31b0611`, `8adb072`.
-- Stage 2 commits: `f348d00`, `44ad8fc`.
-- Stage 3 commits: `b74ce76`, `61d41af`.
-- Stage 4 commit: `9c71874` (API, tests, contract, Postman/curl, docs).
-- Stage 4 adds `graphdb/api.py`, `graphdb/tests/test_api.py`, and `contributions/person-b-graphdb/api/`.
-- `pytest graphdb/tests/test_api.py`: 10 passed.
-- `pytest -q`: 100 passed, 3 skipped, 1 dependency warning.
+- Foundation: `adee66c`, `31b0611`, `8adb072`.
+- Writer: `f348d00`, `44ad8fc`.
+- Queries: `b74ce76`, `61d41af`.
+- API: `9c71874`, `aa87504`.
+- Export/e2e: committed at the final Stage 5/6 checkpoint.
+- `pytest -q`: 106 passed, 5 skipped, 1 dependency warning.
 - `pip check`: no broken requirements.
-- Postman collection JSON parses.
+- `compileall graphdb`: exit 0.
+- `EVENT_KEY_COLUMNS == pipeline.export.EVENT_KEY_COLUMNS`.
 
-## Next step
+## PR chain and merge order
 
-1. Open PR 4 with base `feature/graphdb-queries`.
-2. Start Stage 5: graph-to-flat event-key export for Person C.
-3. Add `graphdb/export.py`, export tests, and the stable column contract.
-4. Then Stage 6: end-to-end integration, docs audit, and final PR descriptions.
+1. `feature/graphdb-foundation` → `main`
+2. `feature/graphdb-writer` → `feature/graphdb-foundation`
+3. `feature/graphdb-queries` → `feature/graphdb-writer`
+4. `feature/graphdb-api` → `feature/graphdb-queries`
+5. `feature/graphdb-export-e2e` → `feature/graphdb-api`
+
+Retarget each PR to `main` after the previous one merges. PR descriptions are in
+`contributions/person-b-graphdb/pr/`.
+
+## Next after Aura is configured
+
+1. Fill `.env` locally; never commit or paste it.
+2. Run `python -m graphdb.health` and `python -m graphdb.apply_schema`.
+3. Record live `SHOW INDEXES`, especially `Topic.name` / `topic_name`.
+4. Run `python -m pytest -m integration`.
+5. Record `EXPLAIN`/`PROFILE` evidence in `TESTING.md`.
+6. Run the API and the Postman/curl examples.
+7. Add observed evidence via a follow-up review PR.
 
 ## Open questions
 
-- Is a reachable Aura instance available through the owner's local `.env`?
-- Live index evidence and live API behavior remain unobserved.
-- Stale `LINKED_TO` cleanup remains a backlog decision.
-- The exact `Topic.name` / `topic_name` schema interaction remains unobserved.
-- The `starlette.testclient` `httpx` deprecation warning may need a dependency decision later.
+- Live Aura schema, writer, query, API, export, and index evidence remain unobserved.
+- Docker Compose remains untested.
+- Stale `LINKED_TO` cleanup is still a backlog decision.
+- The `starlette.testclient` `httpx` deprecation may need a dependency decision later.
 
 ## Committed work
 
-- `feature/graphdb-foundation`: Stage 0/1 foundation.
-- `feature/graphdb-writer`: Stage 2 writer.
-- `feature/graphdb-queries`: Stage 3 queries.
-- `feature/graphdb-api`: Stage 4 API.
-
-All branches are stacked and pushed. Retarget PRs to `main` in merge order.
+All Stage 0–6 code, tests, ADRs, API docs, Postman/curl examples, PR descriptions, and
+[FINAL_AUDIT.md](FINAL_AUDIT.md) are committed on the stacked branches. `opencode.json`,
+`.git/info/exclude`, `.venv`, `__pycache__`, `.env`, and generated outputs are not committed.

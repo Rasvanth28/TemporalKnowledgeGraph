@@ -2,9 +2,9 @@
 
 - **Owner:** Person B (Graph DB & Backend lane)
 - **Contribution id:** `person-b-graphdb`
-- **Branch:** `feature/graphdb-api`
-- **Current stage:** Stage 4 — FastAPI layer, contract docs, Postman collection, and curl examples
-  implemented and unit-tested; live Aura verification is still pending. The branch is stacked on the query PR.
+- **Branch:** `feature/graphdb-export-e2e`
+- **Current stage:** Stages 0–6 implemented and unit-tested; live Aura verification and Docker Compose
+  execution are still pending. The final branch is stacked on the API PR.
 
 > This folder is the isolated documentation home for the Graph DB & Backend lane. Code for the lane lives
 > in `graphdb/`. Shared project files are not edited from this folder unless the owner explicitly approves
@@ -50,16 +50,17 @@ and local workflow needed to build it without drifting into shared files.
 | `graphdb/normalize.py` | **Stage 3 implemented** | Backend copy of Person A's entity-name normalization; no spaCy import |
 | `graphdb/api.py` | **Stage 4 implemented; Aura pending** | FastAPI, Pydantic models, OpenAPI, health, query routes |
 | API contract and clients | **Stage 4 implemented** | `contributions/person-b-graphdb/api/` with contract, curl examples, and Postman collection |
-| Graph-to-flat export | **Planned for Stage 5** | Same columns and `date_key` contract as `pipeline/export.py` |
-| End-to-end round-trip | **Planned for Stage 6** | Synthetic test fixture plus official sample no-regression run |
+| Graph-to-flat export | **Stage 5 implemented; Aura pending** | Same columns and `date_key` contract as `pipeline/export.py` |
+| End-to-end round-trip | **Stage 6 prepared; Aura pending** | Synthetic fixture tests plus official sample no-regression test, both skipped without `NEO4J_URI` |
 
 ## Main files changed
 
-Stages 0–1:
+Stages 0–6:
 
-- `contributions/person-b-graphdb/` — this documentation set.
+- `contributions/person-b-graphdb/` — this documentation set, API contract/clients, PR descriptions, and
+  final audit.
 - `graphdb/` — config, connection wrapper, health check, schema application, writer, queries, normalizer,
-  CQL files, tests.
+  API, export, CQL files, tests.
 - `requirements.txt` — six new installed/tested pins appended.
 - `.env.example` — Neo4j placeholders appended.
 - `docker-compose.yml` — local alternative, untested here.
@@ -81,6 +82,7 @@ python -m graphdb.health
 python -m graphdb.apply_schema
 python -m graphdb.writer --input data/exports/pipeline_output.json
 python -m graphdb.api
+python -m graphdb.export --output data/exports/graph_event_keys.csv
 python -m pytest
 ```
 
@@ -111,6 +113,7 @@ printed. [VERIFIED]
 - [api/API_CONTRACT.md](api/API_CONTRACT.md) — stable HTTP contract, models, limits, and errors.
 - [api/curl_examples.md](api/curl_examples.md) — curl examples for every endpoint.
 - [api/postman_collection.json](api/postman_collection.json) — importable Postman collection.
+- [FINAL_AUDIT.md](FINAL_AUDIT.md) — deliverables, verification matrix, PR map, limitations, and reviewer checklist.
 
 ### Decision records
 
