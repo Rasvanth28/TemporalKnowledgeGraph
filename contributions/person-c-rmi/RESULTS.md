@@ -47,14 +47,24 @@ Interpretation:
 - Clustered keys increase the stage-1 error window and slow the RMI substantially. This is recorded as a
   real weakness of the current two-stage linear design.
 
-## 4. C3 update-drift experiment
+## 4. C3 update-drift experiment (synthetic)
 
-Pending. Will record before/after retraining:
+Observed on 2026-10-19. Initial keys=5,000, new out-of-range keys=500, queries=500, repeats=3,
+bucket_count=128, stage models `linear,linear`. The same query set is measured before and after one
+`retrain_rmi()`.
 
-- out-of-range lookup fallback rate;
-- corrected lookup rate after `retrain_rmi()`;
-- latency before/after;
-- retrain duration.
+| Distribution | Before correct | Before fallbacks | After correct | After fallbacks | Before median ns | After median ns | Retrain ns |
+|---|---|---|---|---|---|---|---|
+| uniform | 0 | 500 | 500 | 0 | 600 | 4,700 | 3,806,200 |
+| clustered | 0 | 500 | 500 | 0 | 700 | 87,300 | 4,862,200 |
+
+Interpretation:
+
+- Before retraining, every new key is out of the trained range, so the RMI correctly reports fallback.
+- One manually triggered retrain recovers every query: `500/500` correct, `0` fallbacks.
+- Retraining is cheap at this size (single-digit milliseconds).
+- Clustered keys remain slower after retraining; that is a model-quality limitation of the current
+  two-stage linear design, not a correctness failure.
 
 ## 5. C4 live RMI vs Neo4j B+ tree
 

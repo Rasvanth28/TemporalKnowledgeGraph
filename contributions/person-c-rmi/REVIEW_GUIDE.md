@@ -43,6 +43,7 @@ Observed for this trace: `100/100` training keys found, `stage1_error_buckets=1`
 | `train_rmi` / `retrain_rmi` | Idempotent retraining entry point |
 | `binary_search_lookup` | Injected fallback contract for C1–C3 |
 | `benchmark_lookup` / `run_synthetic_benchmark` | Same-query-set latency and correctness measurement |
+| `run_drift_experiment` | Before/after retraining recovery on new out-of-range keys |
 
 ## 5. Decisions and rationale
 
@@ -59,6 +60,8 @@ Observed for this trace: `100/100` training keys found, `stage1_error_buckets=1`
   final verdict.
 - The C2 synthetic result is currently negative: RMI is slower than the in-process `bisect` stand-in. Treat
   that as a real finding about the current implementation, not as the final B+ tree comparison.
+- The C3 drift result is positive for correctness: one retrain recovers every out-of-range query. Clustered
+  keys remain slow, which is a model-quality limitation.
 
 ## 7. Limitations and risks
 
