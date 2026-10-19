@@ -12,6 +12,7 @@ index, with a guaranteed-correct fallback to Neo4j.
 ```powershell
 python -m pytest rmi/tests -q
 python -m rmi.train --keys 10000 --distribution uniform --seed 42
+python -m rmi.benchmark --keys 10000 --queries 2000 --distribution uniform --seed 42 --repeats 3
 ```
 
 Configuration:
@@ -26,6 +27,7 @@ RMI_BUCKET_COUNT=128
 - Two-stage RMI with config-driven stage models and bucket count.
 - Maximum-training-error correction windows guaranteeing all training keys are found.
 - Synthetic uniform and clustered sorted-key generators.
+- Injected-fallback benchmark harness with same-query-set correctness and latency results.
 - Idempotent `retrain_rmi()` entry point.
 
 ### Blocked until Person B merges

@@ -3,8 +3,8 @@
 - **Owner:** Person C (Research/RMI lane)
 - **Contribution id:** `person-c-rmi`
 - **Branch:** `feature/rmi-core`
-- **Current stage:** C1 — two-stage RMI core implemented and unit-tested. C2 and C3 are planned. C4 (live
-  Neo4j integration) is blocked until Person B's PRs #8–#12 merge and an Aura `.env` exists.
+- **Current stage:** C2 — benchmark harness implemented and tested; synthetic results recorded. C3 is next.
+  C4 (live Neo4j integration) is blocked until Person B's PRs #8–#12 merge and an Aura `.env` exists.
 
 > This folder is the isolated documentation home for the Research/RMI lane. Code lives in `rmi/`.
 > No Person A or Person B file is edited without explicit approval.
@@ -30,7 +30,9 @@ index, while falling back to Neo4j whenever the learned prediction is out of ran
 | `rmi/keys.py` | **C1 complete** | Deterministic synthetic sorted uniform/clustered keys |
 | `rmi/model.py` | **C1 complete** | Two-stage RMI with stage-1 bucket routing and per-bucket error windows |
 | `rmi/train.py` | **C1 complete** | `train_rmi`, idempotent `retrain_rmi`, CLI summary |
-| Benchmark vs fallback | **C2 planned** | Injectable fallback; live Neo4j benchmark in C4 |
+| `rmi/fallback.py` | **C2 complete** | Injectable fallback contract; binary-search stand-in |
+| `rmi/benchmark.py` | **C2 complete** | Same-query-set RMI vs fallback latency and correctness harness |
+| Live Neo4j benchmark | **C4 blocked** | Needs Person B merged and Aura |
 | Update-drift experiment | **C3 planned** | Insert new keys outside training range, retrain, compare |
 | Neo4j integration | **C4 blocked** | Needs Person B PRs #8–#12 merged and Aura `.env` |
 | `RESULTS.md` | **Draft scaffold** | Filled by C2/C3 and finalized in C4 |
@@ -42,6 +44,7 @@ Inside `.venv`:
 ```powershell
 python -m pytest rmi/tests -q
 python -m rmi.train --keys 10000 --distribution uniform --seed 42
+python -m rmi.benchmark --keys 10000 --queries 2000 --distribution uniform --seed 42 --repeats 3
 ```
 
 Configuration is environment-only:

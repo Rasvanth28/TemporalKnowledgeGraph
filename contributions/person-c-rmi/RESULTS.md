@@ -29,12 +29,23 @@ No latency comparison is claimed yet.
 
 ## 3. C2 benchmark (synthetic)
 
-Pending. Will record, on the same query set:
+Observed on 2026-10-19 with the in-process `bisect` stand-in fallback. 10,000 keys, 2,000 queries,
+repeats=3, bucket_count=128, stage models `linear,linear`.
 
-- RMI median/mean lookup latency;
-- fallback median/mean lookup latency;
-- correctness counts;
-- fallback counts and reasons.
+| Distribution | RMI correct | RMI fallbacks | Fallback correct | RMI median ns | RMI p95 ns | Fallback median ns | Fallback p95 ns | Speedup (fallback/RMI) |
+|---|---|---|---|---|---|---|---|---|
+| uniform | 2000 | 0 | 2000 | 4,400 | 5,700 | 200 | 300 | 0.045 |
+| clustered | 2000 | 0 | 2000 | 37,600 | 84,500 | 200 | 300 | 0.005 |
+
+Interpretation:
+
+- The RMI finds every query; no fallback occurs on training keys.
+- The independent RMI is currently **slower** than the local `bisect` fallback.
+- This is a valid negative result for the synthetic setup, not the final Neo4j B+ tree result.
+- `bisect` is in-process C code; the real Neo4j fallback is a network round trip. The C4 live benchmark is
+  the one that answers the project's research question.
+- Clustered keys increase the stage-1 error window and slow the RMI substantially. This is recorded as a
+  real weakness of the current two-stage linear design.
 
 ## 4. C3 update-drift experiment
 

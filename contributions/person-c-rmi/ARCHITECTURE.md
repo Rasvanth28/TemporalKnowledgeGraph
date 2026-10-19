@@ -29,9 +29,10 @@ flowchart LR
 | `rmi/keys.py` | **C1 complete** | Deterministic synthetic uniform/clustered sorted keys and queries |
 | `rmi/model.py` | **C1 complete** | Stage-1 bucket router, stage-2 local models, error windows, bounded lookup |
 | `rmi/train.py` | **C1 complete** | `train_rmi`, idempotent `retrain_rmi`, CLI summary |
-| `rmi/benchmark.py` | **C2 planned** | Same-query-set RMI vs injected fallback benchmark |
+| `rmi/fallback.py` | **C2 complete** | Injected fallback contract; binary-search stand-in |
+| `rmi/benchmark.py` | **C2 complete** | Same-query-set RMI vs injected fallback benchmark |
 | `rmi/drift.py` | **C3 planned** | New-key drift experiment before/after retraining |
-| `rmi/fallback.py` | **C4 blocked** | Thin adapter around `graphdb.queries` |
+| `rmi/fallback.py` Neo4j adapter | **C4 blocked** | Thin adapter around `graphdb.queries` |
 
 ## 3. RMI algorithm
 
