@@ -2,9 +2,9 @@
 
 - **Owner:** Person B (Graph DB & Backend lane)
 - **Contribution id:** `person-b-graphdb`
-- **Branch:** `feature/graphdb-foundation`
-- **Current stage:** Stage 1 — Neo4j foundation implemented and unit-tested; Aura integration and Docker
-  Compose execution are still pending.
+- **Branch:** `feature/graphdb-writer`
+- **Current stage:** Stage 2 — writer implemented and unit-tested; live Aura integration and Docker Compose
+  execution are still pending. The branch is stacked on the Stage 1 foundation PR.
 
 > This folder is the isolated documentation home for the Graph DB & Backend lane. Code for the lane lives
 > in `graphdb/`. Shared project files are not edited from this folder unless the owner explicitly approves
@@ -44,7 +44,8 @@ and local workflow needed to build it without drifting into shared files.
 | Docker Compose alternative | **Implemented, untested** | Docker is not available in the current shell |
 | Schema, indexes, constraints | **Stage 1 implemented; Aura pending** | Four design-doc indexes plus four uniqueness constraints, verified with mocks; live `SHOW INDEXES` pending |
 | `graphdb/apply_schema.py` | **Stage 1 implemented** | Rerunnable, equivalent-index handling, `--verify-only` |
-| `graphdb/writer.py` | **Planned for Stage 2** | `MERGE`-based, batched, idempotent |
+| `graphdb/writer.py` | **Stage 2 implemented; Aura pending** | Idempotent `MERGE`/`UNWIND`, endpoint validation, counts, latest-input-wins `LINKED_TO`, global `PRECEDES` rebuild |
+| Synthetic writer fixture | **Stage 2 implemented** | `graphdb/tests/fixtures/pipeline_output.json`; original test-only text, no spaCy or Guardian dependency |
 | `graphdb/queries.py` | **Planned for Stage 3** | Entity/date/topic chains plus flat lookup helpers |
 | `graphdb/api.py` | **Planned for Stage 4** | FastAPI, Pydantic models, OpenAPI, curl/Postman examples |
 | Graph-to-flat export | **Planned for Stage 5** | Same columns and `date_key` contract as `pipeline/export.py` |
@@ -55,7 +56,7 @@ and local workflow needed to build it without drifting into shared files.
 Stages 0–1:
 
 - `contributions/person-b-graphdb/` — this documentation set.
-- `graphdb/` — config, connection wrapper, health check, schema application, CQL files, tests.
+- `graphdb/` — config, connection wrapper, health check, schema application, writer, CQL files, tests.
 - `requirements.txt` — six new installed/tested pins appended.
 - `.env.example` — Neo4j placeholders appended.
 - `docker-compose.yml` — local alternative, untested here.
@@ -75,6 +76,7 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 python -m graphdb.health
 python -m graphdb.apply_schema
+python -m graphdb.writer --input data/exports/pipeline_output.json
 python -m pytest
 ```
 
@@ -116,6 +118,8 @@ printed. [VERIFIED]
   queries must document the resulting false negatives for ranges that start after 1 January.
 - **Stale `LINKED_TO` links are not deleted by default.** A later run with a different corpus can leave old
   links behind. This is accepted for the MVP and tracked as a backlog item.
+- **The writer's live idempotency test is skipped** until a reachable Neo4j `.env` exists. The mocked
+  validation/plan tests run without Neo4j.
 - **Global `PRECEDES` recomputation is a batch operation.** It is idempotent but will need care if the graph
   grows large or writes become highly concurrent.
 - **Docker Compose is untested** on this machine because Docker is unavailable in the shell.

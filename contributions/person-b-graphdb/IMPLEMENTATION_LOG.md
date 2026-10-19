@@ -164,3 +164,66 @@ unobserved until Aura credentials exist locally. The Compose path is unverified.
 
 **Next:** Owner review of Stage 1. Then Stage 2: writer, fixture, idempotency tests, global `PRECEDES`
 recompute, and endpoint validation.
+
+## 2026-10-19 — Stage 2: idempotent writer
+
+**Objective:** Implement the idempotent, parameterized Neo4j writer, a synthetic test fixture, endpoint
+validation, global `PRECEDES` recomputation, idempotency/out-of-order tests, and documentation.
+
+**Branch:** `feature/graphdb-writer`, stacked on `feature/graphdb-foundation` because PR 1 is not merged yet.
+
+**Files created:**
+
+- `graphdb/writer.py`
+- `graphdb/tests/fixtures/pipeline_output.json`
+- `graphdb/tests/test_writer_plan.py`
+- `graphdb/tests/test_writer_validation.py`
+- `graphdb/tests/test_writer_neo4j.py`
+- `contributions/person-b-graphdb/pr/PR-0002-graphdb-writer.md`
+
+**Files modified:**
+
+- `contributions/person-b-graphdb/README.md`
+- `contributions/person-b-graphdb/ARCHITECTURE.md`
+- `contributions/person-b-graphdb/IMPLEMENTATION_LOG.md`
+- `contributions/person-b-graphdb/TESTING.md`
+- `contributions/person-b-graphdb/SESSION_HANDOFF.md`
+
+**Reasoning:** The writer parses either `PipelineOutput` objects or the JSON shape into one `WritePlan`,
+validates link endpoints against the batch and existing graph before any write, then uses `UNWIND` +
+parameterized `MERGE` inside explicit transactions. Created-vs-matched counts use a temporary
+`_person_b_batch` marker removed in the same transaction. `PRECEDES` is deleted and rebuilt globally in a
+separate transaction in `(date, id)` order. Entities are deduplicated by id across articles; events and
+articles must be unique. `Article-ABOUT` is derived from each article's event topics.
+
+**Alternatives considered:**
+
+- Counting creations with global before/after node counts: rejected because concurrent writes and
+  relationships make it unreliable.
+- Using APOC merge procedures: rejected because Aura free does not guarantee APOC availability.
+- Restricting `PRECEDES` to `LINKED_TO` pairs: already rejected in ADR-0002.
+- One transaction for the whole batch plus `PRECEDES`: rejected because the rebuild is a separate,
+  independently verifiable phase.
+
+**Checks run and results:**
+
+- `python -m compileall -q graphdb` — exit 0. [VERIFIED]
+- `pytest graphdb/tests -m "not integration" -q` — `33 passed, 2 deselected`. [VERIFIED]
+- `pytest -q` — `75 passed, 2 skipped`. [VERIFIED]
+- `pip check` — no broken requirements. [VERIFIED]
+- `python -m graphdb.writer --input graphdb/tests/fixtures/pipeline_output.json` without `.env` — parsed the
+  fixture and failed with a clear missing-variable configuration error; exit 1. [VERIFIED]
+- Writer integration test — skipped because `NEO4J_URI` is unset. [NOT EXECUTED]
+- Live idempotency and out-of-order `PRECEDES` test — not executed without Aura. [NOT EXECUTED]
+
+**Results and failures:** All writer plan/validation unit tests pass, and the full suite has no
+regressions. The live idempotency proof remains pending a reachable Neo4j instance.
+
+**Links:**
+
+- [ADR-0002](decisions/ADR-0002-graph-schema-and-temporal-semantics.md)
+- [ADR-0003](decisions/ADR-0003-write-idempotency-and-validation.md)
+- [TESTING.md](TESTING.md)
+- [PR-0002](pr/PR-0002-graphdb-writer.md)
+
+**Next:** Stage 3 queries, index-usage evidence, and the stable RMI fallback contract.

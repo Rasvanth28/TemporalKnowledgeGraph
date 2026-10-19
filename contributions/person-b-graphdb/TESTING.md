@@ -143,6 +143,29 @@ No broken requirements found.
 61 passed, 1 skipped
 ```
 
+### Stage 2 writer results
+
+```text
+python -m compileall -q graphdb
+(exit 0)
+
+python -m pytest graphdb/tests -m "not integration" -q
+33 passed, 2 deselected
+
+python -m pytest -q
+75 passed, 2 skipped
+
+python -m pip check
+No broken requirements found.
+
+python -m graphdb.writer --input graphdb/tests/fixtures/pipeline_output.json
+Writer configuration error: Missing required Neo4J environment variable(s)
+[exit 1; fixture parsed successfully; no secret values printed]
+```
+
+The Stage 2 integration test `test_writer_neo4j.py` was skipped because `NEO4J_URI` is unset. It is the
+live proof of idempotency and the global `PRECEDES` rebuild, including the out-of-order insertion case.
+
 ## 5. Results
 
 ### Passed
@@ -185,9 +208,16 @@ The health and schema CLIs were run without `.env` and failed cleanly with a mis
 configuration error and exit code 1; no secret values were printed. This is the intended failure path, not a
 successful Neo4j connection.
 
+Stage 2 writer checks:
+
+- `graphdb/tests -m "not integration"`: 33 passed, 2 deselected.
+- Full suite: 75 passed, 2 skipped.
+- Writer CLI parsed the fixture and failed only at configuration, as expected without `.env`.
+- Live writer idempotency/out-of-order test: skipped without Neo4j.
+
 ### Failed
 
-None observed in Stage 0 or Stage 1.
+None observed in Stages 0–2.
 
 ### Skipped
 
@@ -195,13 +225,16 @@ None observed in Stage 0 or Stage 1.
   Exact pytest reason: `NEO4J_URI is not set; integration test skipped`. This is not a pass. The live schema,
   `SHOW INDEXES`, and `Topic.name` interaction remain unobserved.
 - Docker Compose: not executable because Docker is unavailable in the current shell.
+- Writer integration (`test_writer_neo4j.py`): skipped because `NEO4J_URI` is unset. It exercises write →
+  write again → out-of-order insertion and asserts the PRECEDES chain and counts.
 
 ### Not executable
 
 - Live `python -m graphdb.health`: requires a local `.env` with Aura settings.
 - Live `python -m graphdb.apply_schema`: same dependency; the mocked path is tested.
 - Docker Compose YAML parse: PyYAML is not installed and no new dependency was approved for parsing only.
-- Official pipeline sample round-trip: Stage 2/6 (spaCy is now installed, but the writer does not exist yet).
+- Official pipeline sample round-trip: the writer exists (Stage 2), but a full end-to-end Aura round-trip is
+  Stage 6 and requires a configured `.env`.
 
 ## 6. Evidence policy
 

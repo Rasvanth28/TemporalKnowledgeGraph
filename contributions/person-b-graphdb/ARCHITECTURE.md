@@ -40,11 +40,12 @@ A standalone copy lives in [diagrams/architecture.md](diagrams/architecture.md).
 | `graphdb/apply_schema.py` | **NEW, Stage 1 implemented** | Apply CQL indexes/constraints, handle equivalent schema objects, verify with `SHOW INDEXES`. |
 | `graphdb/indexes.cql` | **NEW, Stage 1 implemented** | Exactly the four design-doc index statements. |
 | `graphdb/constraints.cql` | **NEW, Stage 1 implemented** | Four approved uniqueness constraints. |
-| `graphdb/writer.py` | **NEW, Stage 2** | Idempotent, parameterized, batched graph writes; global `PRECEDES` rebuild; counts. |
+| `graphdb/writer.py` | **NEW, Stage 2 implemented** | Idempotent, parameterized, batched graph writes; endpoint validation; global `PRECEDES` rebuild; created/matched counts. |
+| `graphdb/tests/fixtures/pipeline_output.json` | **NEW, Stage 2 implemented** | Synthetic, test-only, pipeline-output-shaped fixture with 3–4 event chains. |
 | `graphdb/queries.py` | **NEW, Stage 3** | Stable query contract and RMI fallback functions. |
 | `graphdb/api.py` | **NEW, Stage 4** | Thin FastAPI/Pydantic layer; no business logic in routes. |
 | `graphdb/export.py` | **NEW, Stage 5** | Flat event-key export from the graph. |
-| `graphdb/tests/` | **NEW, Stage 1 implemented** | Mocked-driver unit tests and a `test_`-namespaced integration test that auto-skips without `NEO4J_URI`. |
+| `graphdb/tests/` | **NEW, Stages 1–2 implemented** | Mocked-driver unit tests and `test_`-namespaced integration tests that auto-skip without `NEO4J_URI`. |
 
 ## 3. Interfaces
 
