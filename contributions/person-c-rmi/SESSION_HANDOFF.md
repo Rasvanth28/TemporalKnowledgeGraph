@@ -2,8 +2,7 @@
 
 - **Last updated:** 2026-10-19
 - **Branch:** `feature/rmi-drift`
-- **Stage:** C1 PR #13 open, C2 PR #14 open, C3 implementation complete and about to be checkpointed.
-  C4 is blocked.
+- **Stage:** C1 PR #13, C2 PR #14, and C3 PR #15 are open. C4 is blocked.
 
 ## Current status
 
@@ -16,6 +15,7 @@
 
 - C1 commit: `ffc2b06` on `feature/rmi-core`; PR #13 open against `main`.
 - C2 commit: `e0f8d1f` on `feature/rmi-benchmark`; PR #14 open against `feature/rmi-core`.
+- C3 commit: `12a0f5b` on `feature/rmi-drift`; PR #15 open against `feature/rmi-benchmark`.
 - C3 files: `rmi/drift.py`, `rmi/tests/test_drift.py`.
 - `python -m compileall -q rmi`: exit 0.
 - `pytest rmi/tests -q`: 39 passed.
@@ -26,10 +26,10 @@
 
 ## Next step
 
-1. Checkpoint C3: commit, push, open PR C3 with base `feature/rmi-benchmark`.
-2. Do **not** start C4. C4 requires Person B PRs #8–#12 to merge and Aura `.env` to exist.
-3. When Person B is merged, create `feature/rmi-neo4j-integration` from updated `main`, wire
-   `graphdb.queries`, run the live benchmark, and finalize `RESULTS.md`.
+1. Stop here. C1–C3 are open; C4 is blocked.
+2. Wait for Person B PRs #8–#12 to merge and for Aura `.env` to exist.
+3. Then create `feature/rmi-neo4j-integration` from updated `main`, wire `graphdb.queries`, run the live
+   benchmark, and finalize `RESULTS.md`. See [PR-C4 draft](pr/PR-C4-rmi-neo4j-integration.md).
 
 ## Open questions
 

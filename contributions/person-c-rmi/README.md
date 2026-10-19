@@ -77,10 +77,10 @@ propose them.
 
 | PR | Branch | Scope | Depends on |
 |---|---|---|---|
-| C1 | `feature/rmi-core` | RMI core, config, synthetic keys, tests | `main` only |
-| C2 | `feature/rmi-benchmark` | Benchmark harness with injectable fallback, tests | C1 merged (or stacked on C1) |
-| C3 | `feature/rmi-drift` | `retrain_rmi()` experiment, drift metrics, RESULTS draft | C2 merged (or stacked on C2) |
-| C4 | `feature/rmi-neo4j-integration` | Wire `graphdb.queries` fallback, live RMI vs B+tree benchmark, final RESULTS | **Person B PRs #8–#12 merged + Aura `.env`** |
+| C1 (#13) | `feature/rmi-core` | RMI core, config, synthetic keys, tests | `main` only |
+| C2 (#14) | `feature/rmi-benchmark` | Benchmark harness with injectable fallback, tests | C1 merged (or stacked on C1) |
+| C3 (#15) | `feature/rmi-drift` | `retrain_rmi()` experiment, drift metrics, RESULTS draft | C2 merged (or stacked on C2) |
+| C4 (blocked) | `feature/rmi-neo4j-integration` | Wire `graphdb.queries` fallback, live RMI vs B+tree benchmark, final RESULTS | **Person B PRs #8–#12 merged + Aura `.env`** |
 
 C1–C3 have no Person B dependency. Only C4 does.
 
