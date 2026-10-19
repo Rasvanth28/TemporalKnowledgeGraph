@@ -1,0 +1,212 @@
+# Testing — Graph DB & Backend lane
+
+## 1. Environment
+
+Observed on 2026-10-19; updated after the Stage 1 environment setup.
+
+| Item | Value | Label |
+|---|---|---|
+| OS shell | Windows / PowerShell | [VERIFIED] |
+| Python | 3.14.0 | [VERIFIED] |
+| `pip` (global) | 26.0.1 | [VERIFIED] |
+| `pip` (inside `.venv`) | 25.2 | [VERIFIED] |
+| Repository branch at start | `main`, `b0d9f08`, equal to `origin/main` | [VERIFIED] |
+| Working tree at start | Clean | [VERIFIED] |
+| `.venv` | Present, Python 3.14.0 | [VERIFIED] |
+| `.env` | Missing | [VERIFIED] |
+| spaCy | Installed in `.venv` (`3.8.16`) | [VERIFIED] |
+| pytest | Installed in `.venv` (`9.1.1`) | [VERIFIED] |
+| Neo4j driver | Installed in `.venv` (`6.4.1`) | [VERIFIED] |
+| FastAPI / Uvicorn | Installed in `.venv` (`0.146.0` / `0.54.0`) | [VERIFIED] |
+| Docker CLI | Not available on `PATH` | [VERIFIED] |
+| Aura instance | Not configured; `.env` absent | [OPEN] |
+
+Stage 0 contains no executable code. Stage 1 contains the config/connection/health/schema modules.
+
+## 2. Prerequisites for later stages
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+For integration tests, the owner must create a local `.env` from `.env.example` and fill:
+
+```text
+NEO4J_URI
+NEO4J_USER
+NEO4J_PASSWORD
+NEO4J_DATABASE
+```
+
+Do not paste credentials into chat, logs, documentation, or commits. Integration tests use the same
+single Aura database and therefore only operate on `test_`-prefixed ids.
+
+## 3. Stage 0 checks
+
+### Structural checks
+
+```powershell
+Get-ChildItem -Recurse contributions/person-b-graphdb
+git status --short --branch
+git diff --stat
+```
+
+Expected:
+
+- Every file listed in [README.md](README.md) exists.
+- All relative Markdown links resolve.
+- No tracked shared file is modified.
+- `opencode.json` is untracked and excluded locally.
+
+### Result
+
+| Check | Expected | Actual | Status |
+|---|---|---|---|
+| Contribution file set exists | All required files | 15 required files, 0 missing | **Passed** |
+| Relative documentation links | All resolve | 42 links checked, 0 missing | **Passed** |
+| Shared tracked files untouched | Only new contribution files | `git diff --name-only` and staged diff empty; `git status` shows only `?? contributions/` | **Passed** |
+| Local `opencode.json` excluded | Appears as ignored/untracked, never staged | `git check-ignore -v opencode.json` reports `.git/info/exclude:9:opencode.json` | **Passed** |
+| `opencode.json` syntax | Valid JSON, target exists | `python -m json.tool` succeeded; `AGENTS.md` exists | **Passed** |
+| OpenCode instruction loading | `AGENTS.md` is loaded from the local config | The running session reported `Instructions from: contributions/person-b-graphdb/AGENTS.md` after config creation | **Passed** |
+| ADR metadata | Four ADRs, Accepted, 2026-10-19 | 4 ADRs, 0 metadata issues | **Passed** |
+
+This is the Stage 0 snapshot. Stage 1 later added `graphdb/`, `docker-compose.yml`, and the approved
+`requirements.txt` / `.env.example` modifications; the worktree status in the Stage 1 results reflects the
+new set.
+
+## 4. Stage 1 tests and results
+
+### Unit tests (mocked, always runnable)
+
+| Test | Purpose |
+|---|---|
+| Config validation | Missing/blank `NEO4J_*` variables fail with clear errors and no secret values |
+| Config repr | Password never appears in `repr()` or error text |
+| Connection wrapper | Driver/session delegation is mockable |
+| CQL files | Exactly four required indexes and four approved constraints |
+| Schema application | Rerunnable; equivalent-index conflict is handled and verified |
+| Schema verification | Required `SHOW INDEXES` coverage is enforced |
+| Health report | Success/failure paths return correct status and database/version fields |
+
+### Integration tests (real Neo4j)
+
+Marked `@pytest.mark.integration`; auto-skipped when `NEO4J_URI` is unset.
+
+| Test | Purpose |
+|---|---|
+| Health | `driver.verify_connectivity()` and server metadata query succeed |
+| Schema apply twice | No errors, no duplicate schema objects |
+| Schema inspection | Four indexes/constraint coverage, including the `Topic.name` interaction |
+| Probe cleanup | Create one exact `test_` node, delete only that node in `finally` |
+
+Never run a database wipe or a broad delete.
+
+### Regression
+
+```powershell
+python -m pytest
+```
+
+This runs Person A's existing tests plus the new unit tests. Integration tests skip without `NEO4J_URI`.
+No Person A files are modified.
+
+### Observed Stage 1 command results
+
+```text
+python -m venv .venv
+.\.venv\Scripts\python.exe --version
+Python 3.14.0
+
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+[first attempt exceeded the 15-minute command timeout while installing; no wheel failed]
+[retry succeeded]
+
+.\.venv\Scripts\python.exe -m pip install neo4j==6.4.1 fastapi==0.146.0 uvicorn==0.54.0
+Successfully installed fastapi-0.146.0 neo4j-6.4.1 opentelemetry-api-1.45.1
+pytz-2026.5 starlette-1.9.0 uvicorn-0.54.0
+
+.\.venv\Scripts\python.exe -m pip check
+No broken requirements found.
+
+.\.venv\Scripts\python.exe -m compileall -q graphdb
+(exit 0)
+
+.\.venv\Scripts\python.exe -m pytest graphdb/tests -m "not integration" -q
+19 passed, 1 deselected
+
+.\.venv\Scripts\python.exe -m pytest pipeline/tests -q
+42 passed
+
+.\.venv\Scripts\python.exe -m pytest -q
+61 passed, 1 skipped
+```
+
+## 5. Results
+
+### Passed
+
+Stage 0 structural checks, command results observed on 2026-10-19:
+
+```text
+git status --short --branch
+## feature/graphdb-foundation
+?? contributions/
+
+git diff --stat
+(empty)
+
+git diff --cached --stat
+(empty)
+
+git check-ignore -v opencode.json
+.git/info/exclude:9:opencode.json	opencode.json
+
+python -m json.tool opencode.json
+opencode.json: valid JSON
+
+required_files=15 missing=0
+checked_links=42 missing_links=0
+adrs=4 metadata_issues=0
+```
+
+These are structural/documentation checks, not runtime tests.
+
+Stage 1 mocked-runtime checks also passed:
+
+- `graphdb/tests -m "not integration"`: 19 passed, 1 deselected.
+- Person A pipeline tests: 42 passed.
+- Full suite: 61 passed, 1 skipped.
+- `pip check`: no broken requirements.
+- `compileall`: exit 0.
+
+The health and schema CLIs were run without `.env` and failed cleanly with a missing-variable
+configuration error and exit code 1; no secret values were printed. This is the intended failure path, not a
+successful Neo4j connection.
+
+### Failed
+
+None observed in Stage 0 or Stage 1.
+
+### Skipped
+
+- Aura integration (`test_health_schema_and_cleanup_round_trip`): skipped because `NEO4J_URI` is unset.
+  Exact pytest reason: `NEO4J_URI is not set; integration test skipped`. This is not a pass. The live schema,
+  `SHOW INDEXES`, and `Topic.name` interaction remain unobserved.
+- Docker Compose: not executable because Docker is unavailable in the current shell.
+
+### Not executable
+
+- Live `python -m graphdb.health`: requires a local `.env` with Aura settings.
+- Live `python -m graphdb.apply_schema`: same dependency; the mocked path is tested.
+- Docker Compose YAML parse: PyYAML is not installed and no new dependency was approved for parsing only.
+- Official pipeline sample round-trip: Stage 2/6 (spaCy is now installed, but the writer does not exist yet).
+
+## 6. Evidence policy
+
+- Results are recorded from commands actually run.
+- If a command cannot run, it is listed under “could not execute” rather than guessed.
+- `EXPLAIN`/`PROFILE` output for index usage is required in Stage 3 and will be pasted or summarized with
+  the exact query and observed plan.
+- Year-only dates are a known correctness limitation, not a test failure of the graph lane.

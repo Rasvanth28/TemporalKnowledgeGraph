@@ -1,0 +1,4 @@
+CREATE CONSTRAINT article_id_unique IF NOT EXISTS FOR (a:Article) REQUIRE a.id IS UNIQUE;
+CREATE CONSTRAINT event_id_unique   IF NOT EXISTS FOR (e:Event)   REQUIRE e.id IS UNIQUE;
+CREATE CONSTRAINT entity_id_unique  IF NOT EXISTS FOR (n:Entity)  REQUIRE n.id IS UNIQUE;
+CREATE CONSTRAINT topic_name_unique IF NOT EXISTS FOR (t:Topic)   REQUIRE t.name IS UNIQUE;
