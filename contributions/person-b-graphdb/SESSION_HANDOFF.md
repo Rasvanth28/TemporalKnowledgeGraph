@@ -1,45 +1,50 @@
 # Session handoff
 
 - **Last updated:** 2026-10-19
-- **Branch:** `feature/graphdb-queries`
-- **Stage:** Stage 3 committed and pushed; PR 3 is ready to open against PR 2.
+- **Branch:** `feature/graphdb-api`
+- **Stage:** Stage 4 implementation complete; checkpoint commit is being created.
 
 ## Current status
 
-- Stage 0/1 (foundation) and Stage 2 (writer) are committed and pushed.
-- Stage 3 (queries, normalizer, RMI fallback) is implemented on the stacked query branch.
-- Query unit tests pass; live query and index evidence are skipped without Aura.
-- Docker Compose remains untested.
+- Stages 0–3 are committed and pushed (foundation, writer, queries).
+- Stage 4 (FastAPI layer, contract docs, Postman/curl examples) is implemented on the stacked API branch.
+- API unit tests pass with an injected fake client.
+- Live API, live query, live index evidence, and Docker Compose are all pending.
+- No Aura `.env` exists.
 
 ## Last verified state
 
 - Stage 1 commits: `adee66c`, `31b0611`, `8adb072`.
-- Stage 2 commits: `f348d00` (writer), `44ad8fc` (handoff).
-- Stage 3 commit: `b74ce76` (queries, normalizer, tests, docs, PR description).
-- Stage 3 adds `graphdb/queries.py`, `graphdb/normalize.py`, and query tests.
-- `pytest graphdb/tests -m "not integration"`: 48 passed, 3 deselected.
-- `pytest -q`: 90 passed, 3 skipped.
+- Stage 2 commits: `f348d00`, `44ad8fc`.
+- Stage 3 commits: `b74ce76`, `61d41af`.
+- Stage 4 adds `graphdb/api.py`, `graphdb/tests/test_api.py`, and `contributions/person-b-graphdb/api/`.
+- `pytest graphdb/tests/test_api.py`: 10 passed.
+- `pytest -q`: 100 passed, 3 skipped, 1 dependency warning.
 - `pip check`: no broken requirements.
-- Live Aura queries and `EXPLAIN` index evidence: not executed.
+- Postman collection JSON parses.
 
 ## Next step
 
-1. Open PR 3 with base `feature/graphdb-writer`.
-2. Start Stage 4: propose FastAPI endpoints/models for owner review, then implement.
-3. Add `graphdb/api.py`, API tests, curl examples, and a Postman collection.
-4. Run live API tests only if `NEO4J_URI` is configured.
+After the Stage 4 checkpoint commit:
+
+1. Open PR 4 with base `feature/graphdb-queries`.
+2. Start Stage 5: graph-to-flat event-key export for Person C.
+3. Add `graphdb/export.py`, export tests, and the stable column contract.
+4. Then Stage 6: end-to-end integration, docs audit, and final PR descriptions.
 
 ## Open questions
 
 - Is a reachable Aura instance available through the owner's local `.env`?
-- The live query round-trip and `event_date` index evidence are still unobserved.
+- Live index evidence and live API behavior remain unobserved.
 - Stale `LINKED_TO` cleanup remains a backlog decision.
 - The exact `Topic.name` / `topic_name` schema interaction remains unobserved.
+- The `starlette.testclient` `httpx` deprecation warning may need a dependency decision later.
 
 ## Committed work
 
-- `feature/graphdb-foundation`: Stage 0/1 foundation, PR description, handoff.
-- `feature/graphdb-writer`: Stage 2 writer, fixture, tests, docs, PR description.
-- `feature/graphdb-queries`: Stage 3 queries, normalizer, tests, docs, PR description.
+- `feature/graphdb-foundation`: Stage 0/1 foundation.
+- `feature/graphdb-writer`: Stage 2 writer.
+- `feature/graphdb-queries`: Stage 3 queries.
+- `feature/graphdb-api`: Stage 4 API.
 
-All branches are stacked and pushed. Retarget each PR to `main` in merge order.
+All branches are stacked and pushed. Retarget PRs to `main` in merge order.

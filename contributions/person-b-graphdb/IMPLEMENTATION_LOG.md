@@ -288,3 +288,65 @@ record index evidence.
 - [PR-0003](pr/PR-0003-graphdb-queries.md)
 
 **Next:** Stage 4 API proposal and implementation.
+
+## 2026-10-19 — Stage 4: FastAPI layer and client contract
+
+**Objective:** Expose the stable query contract through a thin, documented FastAPI layer with Pydantic
+response models, validation, `/health`, OpenAPI, curl examples, and a Postman collection.
+
+**Branch:** `feature/graphdb-api`, stacked on `feature/graphdb-queries` because the earlier PRs are not
+merged yet.
+
+**Files created:**
+
+- `graphdb/api.py`
+- `graphdb/tests/test_api.py`
+- `contributions/person-b-graphdb/api/API_CONTRACT.md`
+- `contributions/person-b-graphdb/api/curl_examples.md`
+- `contributions/person-b-graphdb/api/postman_collection.json`
+- `contributions/person-b-graphdb/pr/PR-0004-graphdb-api.md`
+
+**Files modified:**
+
+- `contributions/person-b-graphdb/README.md`
+- `contributions/person-b-graphdb/ARCHITECTURE.md`
+- `contributions/person-b-graphdb/IMPLEMENTATION_LOG.md`
+- `contributions/person-b-graphdb/TESTING.md`
+- `contributions/person-b-graphdb/SESSION_HANDOFF.md`
+- `contributions/person-b-graphdb/PROPOSED_ROOT_README_SECTION.md`
+
+**Reasoning:** Route handlers only validate and delegate to `graphdb.queries`, so the graph contract remains
+the single source of behavior. The app defers environment loading to startup, which lets tests inject a fake
+client without `.env`. Pydantic models document the stable response shape. The contract file records
+endpoints, limits, and errors before/alongside implementation, satisfying the early-review requirement while
+keeping the lane moving under the owner's blanket instruction to complete the work.
+
+**Alternatives considered:**
+
+- Postman-only API: rejected in ADR-0004.
+- Duplicating query logic in route handlers: rejected; it would split the stable contract.
+- Loading Neo4j config at import: rejected because it would break unit tests without `.env`.
+- Making the API return raw dicts: rejected; Pydantic response models keep the contract explicit.
+
+**Checks run and results:**
+
+- `python -m compileall -q graphdb` — exit 0. [VERIFIED]
+- `pytest graphdb/tests/test_api.py -q` — `10 passed`. [VERIFIED]
+- `pytest graphdb/tests -m "not integration" -q` — `58 passed, 3 deselected`. [VERIFIED]
+- `pytest -q` — `100 passed, 3 skipped, 1 warning`. [VERIFIED]
+- `pip check` — no broken requirements. [VERIFIED]
+- Postman collection JSON parses successfully. [VERIFIED]
+- Live API against Aura — not executed without `.env`. [NOT EXECUTED]
+
+**Results and failures:** API unit tests pass, including `/health`, event lookup, date range, entity/topic/
+date-range chains, 404, 422, and OpenAPI path checks. One Starlette/httpx deprecation warning is emitted by
+the test client dependency; it does not affect API behavior.
+
+**Links:**
+
+- [ADR-0004](decisions/ADR-0004-query-api-and-export-contracts.md)
+- [API contract](api/API_CONTRACT.md)
+- [TESTING.md](TESTING.md)
+- [PR-0004](pr/PR-0004-graphdb-api.md)
+
+**Next:** Stage 5 graph-to-flat export for Person C, then Stage 6 end-to-end integration and final audit.

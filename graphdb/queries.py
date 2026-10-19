@@ -461,6 +461,7 @@ def chain_by_date_range(
             "depth": depth_value,
             "limit": limit_value,
         },
+        "match_mode": "exact" if seed_ids else "none",
         "events": events,
         "links": links,
         "truncated": truncated,

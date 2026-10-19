@@ -2,9 +2,9 @@
 
 - **Owner:** Person B (Graph DB & Backend lane)
 - **Contribution id:** `person-b-graphdb`
-- **Branch:** `feature/graphdb-queries`
-- **Current stage:** Stage 3 — query contract and normalizer implemented and unit-tested; live index evidence
-  and Aura integration are still pending. The branch is stacked on the writer PR.
+- **Branch:** `feature/graphdb-api`
+- **Current stage:** Stage 4 — FastAPI layer, contract docs, Postman collection, and curl examples
+  implemented and unit-tested; live Aura verification is still pending. The branch is stacked on the query PR.
 
 > This folder is the isolated documentation home for the Graph DB & Backend lane. Code for the lane lives
 > in `graphdb/`. Shared project files are not edited from this folder unless the owner explicitly approves
@@ -48,7 +48,8 @@ and local workflow needed to build it without drifting into shared files.
 | Synthetic writer fixture | **Stage 2 implemented** | `graphdb/tests/fixtures/pipeline_output.json`; original test-only text, no spaCy or Guardian dependency |
 | `graphdb/queries.py` | **Stage 3 implemented; Aura pending** | Entity/date/topic chains, flat lookup helpers, depth/limit/confidence guards, chronological ordering |
 | `graphdb/normalize.py` | **Stage 3 implemented** | Backend copy of Person A's entity-name normalization; no spaCy import |
-| `graphdb/api.py` | **Planned for Stage 4** | FastAPI, Pydantic models, OpenAPI, curl/Postman examples |
+| `graphdb/api.py` | **Stage 4 implemented; Aura pending** | FastAPI, Pydantic models, OpenAPI, health, query routes |
+| API contract and clients | **Stage 4 implemented** | `contributions/person-b-graphdb/api/` with contract, curl examples, and Postman collection |
 | Graph-to-flat export | **Planned for Stage 5** | Same columns and `date_key` contract as `pipeline/export.py` |
 | End-to-end round-trip | **Planned for Stage 6** | Synthetic test fixture plus official sample no-regression run |
 
@@ -79,6 +80,7 @@ python -m pip install -r requirements.txt
 python -m graphdb.health
 python -m graphdb.apply_schema
 python -m graphdb.writer --input data/exports/pipeline_output.json
+python -m graphdb.api
 python -m pytest
 ```
 
@@ -106,6 +108,9 @@ printed. [VERIFIED]
 - [PROPOSED_ROOT_README_SECTION.md](PROPOSED_ROOT_README_SECTION.md) — text for the eventual root README section.
 - [decisions/README.md](decisions/README.md) — ADR index and template.
 - [diagrams/architecture.md](diagrams/architecture.md) — Mermaid architecture diagram.
+- [api/API_CONTRACT.md](api/API_CONTRACT.md) — stable HTTP contract, models, limits, and errors.
+- [api/curl_examples.md](api/curl_examples.md) — curl examples for every endpoint.
+- [api/postman_collection.json](api/postman_collection.json) — importable Postman collection.
 
 ### Decision records
 
@@ -126,6 +131,10 @@ printed. [VERIFIED]
   plan contains `event_date`; it cannot run without Aura.
 - **The case-insensitive entity fallback is a non-indexed scan.** It runs only when exact normalized
   matching returns nothing.
+- **Live API verification is pending Aura.** API tests use an injected fake client; no endpoint has been
+  exercised against a real database yet.
+- `starlette.testclient` reports an `httpx` deprecation advisory under the current dependency set. It is a
+  warning, not an API failure.
 - **Global `PRECEDES` recomputation is a batch operation.** It is idempotent but will need care if the graph
   grows large or writes become highly concurrent.
 - **Docker Compose is untested** on this machine because Docker is unavailable in the shell.

@@ -1,0 +1,234 @@
+"""Thin FastAPI layer over ``graphdb.queries``.
+
+The route handlers contain no graph logic. They validate input, call the stable
+query functions, and serialize the plain dictionaries returned by them.
+
+Configuration comes from the same ``NEO4J_*`` environment variables as the rest
+of the backend. The app is created without loading configuration at import time
+so tests can inject a fake client.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+from contextlib import asynccontextmanager
+from typing import Any, Literal
+
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
+from graphdb.config import Neo4jConfig, load_neo4j_config
+from graphdb.connection import Neo4jClient
+from graphdb.health import check_health
+from graphdb.queries import (
+    MAX_CHAIN_DEPTH,
+    chain_by_date_range,
+    chain_by_entity,
+    chain_by_topic,
+    event_by_id,
+    events_in_date_range,
+)
+
+API_TITLE = "Temporal Knowledge Graph API"
+API_VERSION = "0.1.0"
+
+
+class EntityModel(BaseModel):
+    id: str
+    name: str
+    type: str
+
+
+class EventModel(BaseModel):
+    id: str
+    description: str
+    date: str | None = None
+    date_key: int | None = None
+    type: str
+    date_source: str | None = None
+    article_id: str | None = None
+    entities: list[EntityModel] = Field(default_factory=list)
+    topics: list[str] = Field(default_factory=list)
+
+
+class LinkModel(BaseModel):
+    from_event_id: str
+    to_event_id: str
+    confidence: float
+    reason: str
+    from_date: str | None = None
+    to_date: str | None = None
+
+
+class ChainModel(BaseModel):
+    query: dict[str, Any]
+    entity: EntityModel | None = None
+    topic: str | None = None
+    match_mode: str
+    ambiguous: bool = False
+    events: list[EventModel] = Field(default_factory=list)
+    links: list[LinkModel] = Field(default_factory=list)
+    truncated: bool = False
+
+
+class Neo4jHealthModel(BaseModel):
+    connected: bool
+    database: str
+    server_version: str | None = None
+    edition: str | None = None
+    error: str | None = None
+
+
+class HealthModel(BaseModel):
+    status: Literal["ok", "degraded"]
+    neo4j: Neo4jHealthModel
+
+
+_FAKE_TEST_CONFIG = Neo4jConfig(
+    uri="bolt://test.invalid:7687",
+    user="test",
+    password="",
+    database="neo4j",
+)
+
+
+def create_app(
+    client: Neo4jClient | None = None,
+    config: Neo4jConfig | None = None,
+) -> FastAPI:
+    """Create the FastAPI app.
+
+    When ``client`` is supplied (tests), it is used directly and closed by the
+    caller. Otherwise a real client is created from the environment at startup.
+    """
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if client is not None:
+            app.state.neo4j_client = client
+            app.state.neo4j_config = config or _FAKE_TEST_CONFIG
+            yield
+            return
+
+        real_config = config or load_neo4j_config()
+        real_client = Neo4jClient(real_config)
+        app.state.neo4j_client = real_client
+        app.state.neo4j_config = real_config
+        try:
+            yield
+        finally:
+            real_client.close()
+
+    app = FastAPI(title=API_TITLE, version=API_VERSION, lifespan=lifespan)
+
+    def get_client(request: Request) -> Neo4jClient:
+        return request.app.state.neo4j_client
+
+    def get_config(request: Request) -> Neo4jConfig:
+        return request.app.state.neo4j_config
+
+    @app.get("/health", response_model=HealthModel)
+    def health(
+        neo4j_client: Neo4jClient = Depends(get_client),
+        neo4j_config: Neo4jConfig = Depends(get_config),
+    ):
+        report = check_health(neo4j_config, client=neo4j_client)
+        model = HealthModel(
+            status="ok" if report.connected else "degraded",
+            neo4j=Neo4jHealthModel(
+                connected=report.connected,
+                database=report.database,
+                server_version=report.server_version,
+                edition=report.edition,
+                error=report.error,
+            ),
+        )
+        if not report.connected:
+            return JSONResponse(status_code=503, content=model.model_dump())
+        return model
+
+    @app.get("/events/{event_id}", response_model=EventModel)
+    def get_event(
+        event_id: str,
+        neo4j_client: Neo4jClient = Depends(get_client),
+    ):
+        event = event_by_id(neo4j_client, event_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail=f"event not found: {event_id}")
+        return event
+
+    @app.get("/events", response_model=list[EventModel])
+    def list_events(
+        start: dt.date = Query(..., description="Inclusive ISO start date"),
+        end: dt.date = Query(..., description="Inclusive ISO end date"),
+        limit: int = Query(100, ge=1, le=1000),
+        offset: int = Query(0, ge=0),
+        neo4j_client: Neo4jClient = Depends(get_client),
+    ):
+        try:
+            return events_in_date_range(neo4j_client, start, end, limit=limit, offset=offset)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/chains/entity", response_model=ChainModel)
+    def entity_chain(
+        name: str = Query(..., min_length=1),
+        min_confidence: float = Query(0.0, ge=0.0, le=1.0),
+        depth: int = Query(3, ge=1, le=MAX_CHAIN_DEPTH),
+        limit: int = Query(100, ge=1, le=1000),
+        neo4j_client: Neo4jClient = Depends(get_client),
+    ):
+        try:
+            return chain_by_entity(
+                neo4j_client, name, min_confidence=min_confidence, depth=depth, limit=limit
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/chains/topic", response_model=ChainModel)
+    def topic_chain(
+        topic: str = Query(..., min_length=1),
+        min_confidence: float = Query(0.0, ge=0.0, le=1.0),
+        depth: int = Query(3, ge=1, le=MAX_CHAIN_DEPTH),
+        limit: int = Query(100, ge=1, le=1000),
+        neo4j_client: Neo4jClient = Depends(get_client),
+    ):
+        try:
+            return chain_by_topic(
+                neo4j_client, topic, min_confidence=min_confidence, depth=depth, limit=limit
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/chains/date-range", response_model=ChainModel)
+    def date_range_chain(
+        start: dt.date = Query(..., description="Inclusive ISO start date"),
+        end: dt.date = Query(..., description="Inclusive ISO end date"),
+        min_confidence: float = Query(0.0, ge=0.0, le=1.0),
+        depth: int = Query(3, ge=1, le=MAX_CHAIN_DEPTH),
+        limit: int = Query(100, ge=1, le=1000),
+        neo4j_client: Neo4jClient = Depends(get_client),
+    ):
+        try:
+            return chain_by_date_range(
+                neo4j_client,
+                start,
+                end,
+                min_confidence=min_confidence,
+                depth=depth,
+                limit=limit,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return app
+
+
+app = create_app()
+
+
+if __name__ == "__main__":  # pragma: no cover - manual entry point
+    import uvicorn
+
+    uvicorn.run("graphdb.api:app", host="127.0.0.1", port=8000, reload=False)

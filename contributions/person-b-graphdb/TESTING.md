@@ -195,6 +195,32 @@ entity/date/topic query results, and asserts that the `EXPLAIN` plan for the dat
 | `MATCH (n:Entity {name: $name})` | Exact name match uses `entity_name`; integration test exercises it | **Not executable without Aura** |
 | `MATCH (n:Entity) WHERE toLower(n.name) = toLower($name)` | Deliberately non-indexed fallback; documented in code | **By design** |
 
+### Stage 4 API results
+
+```text
+python -m compileall -q graphdb
+(exit 0)
+
+python -m pytest graphdb/tests/test_api.py -q
+10 passed
+
+python -m pytest graphdb/tests -m "not integration" -q
+58 passed, 3 deselected
+
+python -m pytest -q
+100 passed, 3 skipped, 1 warning
+
+python -m pip check
+No broken requirements found.
+```
+
+API tests use an injected fake Neo4j client. Live HTTP requests against Aura are not executed without a
+configured `.env`. The Postman collection JSON parses successfully; curl examples are documented but not
+executed against a live server.
+
+One warning is emitted: `StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated;
+install httpx2 instead.` It is a dependency advisory for the test client, not an API behavior failure.
+
 ## 5. Results
 
 ### Passed
@@ -250,9 +276,16 @@ Stage 3 query checks:
 - Full suite: 90 passed, 3 skipped.
 - Live query round-trip and `EXPLAIN` index evidence: not executable without Neo4j.
 
+Stage 4 API checks:
+
+- `graphdb/tests/test_api.py`: 10 passed.
+- `graphdb/tests -m "not integration"`: 58 passed, 3 deselected.
+- Full suite: 100 passed, 3 skipped, 1 dependency warning.
+- Live HTTP calls against Aura: not executable without `.env`.
+
 ### Failed
 
-None observed in Stages 0–3.
+None observed in Stages 0–4.
 
 ### Skipped
 
@@ -264,6 +297,8 @@ None observed in Stages 0–3.
   write again → out-of-order insertion and asserts the PRECEDES chain and counts.
 - Query integration (`test_queries_neo4j.py`): skipped because `NEO4J_URI` is unset. It exercises the query
   round-trip and the date-range `EXPLAIN` index evidence.
+- API live calls: not executed. The API unit tests use an injected fake client; no HTTP server was started
+  against Aura because `.env` is missing.
 
 ### Not executable
 
@@ -273,6 +308,7 @@ None observed in Stages 0–3.
 - Official pipeline sample round-trip: writer and queries exist (Stages 2–3), but a full end-to-end Aura
   round-trip is Stage 6 and requires a configured `.env`.
 - Live `EXPLAIN`/`PROFILE` evidence: not executable without Aura; the integration test is prepared.
+- Live API and Postman/curl requests: not executable without a configured server-side `.env`.
 
 ## 6. Evidence policy
 

@@ -228,6 +228,7 @@ def test_chain_by_date_range_uses_date_seeds():
     result = chain_by_date_range(client, "2026-03-01", "2026-03-31")
 
     assert result["query"]["start"] == "2026-03-01"
+    assert result["match_mode"] == "exact"
     assert [event["id"] for event in result["events"]] == ["evt1"]
 
 
