@@ -10,8 +10,8 @@
 - All Graph DB unit tests and all Person A tests pass.
 - The real-Neo4j integration test is skipped because `.env` / `NEO4J_URI` is absent.
 - Docker Compose is present but unexecuted because Docker is unavailable.
-- The intended Stage 0/1 files are staged explicitly by path.
-- Nothing is committed or pushed.
+- Stage 0/1 are committed and pushed on `feature/graphdb-foundation`.
+- PR 1 is ready for the owner to open from the pushed branch.
 
 ## Last verified state
 
@@ -32,10 +32,11 @@
 - Final documentation link check: 47 links checked, 0 missing.
 - `opencode.json` remains valid, local, and excluded via `.git/info/exclude`.
 - No shared tracked file other than the approved Stage 1 files was modified.
+- Commits pushed: `adee66c` (foundation) and `31b0611` (PR description).
 
 ## Next step
 
-Wait for owner review of Stage 1. After approval, Stage 2:
+Stage 2 is stacked on `feature/graphdb-foundation` because PR 1 is not merged yet:
 
 1. Add the synthetic `pipeline_output.json`-shaped fixture under `graphdb/tests/fixtures/`.
 2. Implement `graphdb/writer.py` with parameterized `MERGE`/`UNWIND`, endpoint validation, counts, and
@@ -45,7 +46,7 @@ Wait for owner review of Stage 1. After approval, Stage 2:
 5. Run the official sample through the pipeline and writer as a no-regression/count check.
 6. Run against Aura if a local `.env` exists; otherwise record integration as not executable.
 
-Do not commit or push until the owner approves the staged diff.
+The Stage 2 PR should target `feature/graphdb-foundation`, not `main`, until PR 1 merges.
 
 ## Open questions
 
@@ -55,12 +56,12 @@ Do not commit or push until the owner approves the staged diff.
 - The exact Neo4j `SHOW INDEXES` behaviour for `Topic.name` versus `topic_name` is still unobserved.
 - The Docker Compose alternative is still untested.
 
-## Staged work
+## Committed work
 
 - Stage 0 documentation under `contributions/person-b-graphdb/`.
 - Stage 1 code under `graphdb/`.
 - `docker-compose.yml`.
 - Approved shared edits to `requirements.txt` and `.env.example`.
-- Local untracked `opencode.json` and local `.git/info/exclude` line are not staged.
+- Local untracked `opencode.json` and local `.git/info/exclude` line are not committed.
 
-The listed files are staged explicitly by path. Nothing is committed or pushed.
+The listed files are committed and pushed on `feature/graphdb-foundation`.
