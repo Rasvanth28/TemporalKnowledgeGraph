@@ -3,8 +3,8 @@
 - **Owner:** Person B (Graph DB & Backend lane)
 - **Contribution id:** `person-b-graphdb`
 - **Branch:** `feature/graphdb-export-e2e`
-- **Current stage:** Stages 0–6 implemented and unit-tested; live Aura verification and Docker Compose
-  execution are still pending. The final branch is stacked on the API PR.
+- **Current stage:** Stages 0–6 implemented and unit-tested; five stacked PRs are open (#8–#12). Live Aura
+  verification and Docker Compose execution are still pending.
 
 > This folder is the isolated documentation home for the Graph DB & Backend lane. Code for the lane lives
 > in `graphdb/`. Shared project files are not edited from this folder unless the owner explicitly approves

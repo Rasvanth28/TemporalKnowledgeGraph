@@ -51,15 +51,15 @@ Those are recorded as `NOT EXECUTED` in [TESTING.md](TESTING.md), not as passes.
 
 | PR | Branch | Base while stacked | Scope |
 |---|---|---|---|
-| PR 1 | `feature/graphdb-foundation` | `main` | Stage 0 + Stage 1 |
-| PR 2 | `feature/graphdb-writer` | `feature/graphdb-foundation` | Stage 2 |
-| PR 3 | `feature/graphdb-queries` | `feature/graphdb-writer` | Stage 3 |
-| PR 4 | `feature/graphdb-api` | `feature/graphdb-queries` | Stage 4 |
-| PR 5 | `feature/graphdb-export-e2e` | `feature/graphdb-api` | Stage 5 + Stage 6 |
+| [#8](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/8) | `feature/graphdb-foundation` | `main` | Stage 0 + Stage 1 |
+| [#9](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/9) | `feature/graphdb-writer` | `feature/graphdb-foundation` | Stage 2 |
+| [#10](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/10) | `feature/graphdb-queries` | `feature/graphdb-writer` | Stage 3 |
+| [#11](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/11) | `feature/graphdb-api` | `feature/graphdb-queries` | Stage 4 |
+| [#12](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/12) | `feature/graphdb-export-e2e` | `feature/graphdb-api` | Stage 5 + Stage 6 |
 
-All five branches are pushed. Because `gh` is not installed, PR descriptions are checked into
-`contributions/person-b-graphdb/pr/` and are ready to paste into GitHub. Merge in order and retarget each PR
-to `main` after the previous branch merges.
+All five PRs are open and report `MERGEABLE`. The repository has no CI checks configured, so `gh pr
+checks` reports “no checks reported.” Merge in order and retarget each PR to `main` after the previous
+branch merges.
 
 ## Repository hygiene
 

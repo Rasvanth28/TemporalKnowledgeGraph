@@ -25,14 +25,14 @@
 
 ## PR chain and merge order
 
-1. `feature/graphdb-foundation` → `main`
-2. `feature/graphdb-writer` → `feature/graphdb-foundation`
-3. `feature/graphdb-queries` → `feature/graphdb-writer`
-4. `feature/graphdb-api` → `feature/graphdb-queries`
-5. `feature/graphdb-export-e2e` → `feature/graphdb-api`
+1. [#8](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/8) `feature/graphdb-foundation` → `main`
+2. [#9](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/9) `feature/graphdb-writer` → `feature/graphdb-foundation`
+3. [#10](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/10) `feature/graphdb-queries` → `feature/graphdb-writer`
+4. [#11](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/11) `feature/graphdb-api` → `feature/graphdb-queries`
+5. [#12](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/12) `feature/graphdb-export-e2e` → `feature/graphdb-api`
 
-Retarget each PR to `main` after the previous one merges. PR descriptions are in
-`contributions/person-b-graphdb/pr/`.
+All five are open and `MERGEABLE`; no CI checks are configured. Retarget each PR to `main` after the
+previous one merges. PR descriptions are in `contributions/person-b-graphdb/pr/`.
 
 ## Next after Aura is configured
 
