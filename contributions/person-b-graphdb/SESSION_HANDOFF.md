@@ -2,7 +2,7 @@
 
 - **Last updated:** 2026-10-19
 - **Branch:** `feature/graphdb-writer`
-- **Stage:** Stage 2 implementation complete; checkpoint commit is being created.
+- **Stage:** Stage 2 committed and pushed; PR 2 is ready to open against PR 1.
 
 ## Current status
 
@@ -14,6 +14,7 @@
 ## Last verified state
 
 - Stage 1 commits: `adee66c` (foundation), `31b0611` (PR description), `8adb072` (handoff).
+- Stage 2 commit: `f348d00` (writer, fixture, tests, docs, PR description).
 - Stage 2 files: `graphdb/writer.py`, the synthetic fixture, and writer tests.
 - `pytest graphdb/tests -m "not integration"`: 33 passed, 2 deselected.
 - `pytest -q`: 75 passed, 2 skipped.
@@ -22,8 +23,6 @@
 - No live Aura result is claimed.
 
 ## Next step
-
-After the Stage 2 checkpoint commit:
 
 1. Open PR 2 with base `feature/graphdb-foundation` until PR 1 merges.
 2. Start Stage 3: queries and index-usage evidence.
@@ -42,4 +41,5 @@ After the Stage 2 checkpoint commit:
 - `feature/graphdb-foundation`: Stage 0/1 foundation, PR description, and handoff update.
 - `feature/graphdb-writer`: Stage 2 writer, fixture, tests, and documentation.
 
-Branch stacking is intentional while PR 1 is unmerged. Retarget PR 2 to `main` after PR 1 merges.
+Both branches are pushed. Branch stacking is intentional while PR 1 is unmerged. Retarget PR 2 to `main`
+after PR 1 merges.
