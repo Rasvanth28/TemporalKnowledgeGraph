@@ -2,7 +2,7 @@
 
 - **Last updated:** 2026-10-19
 - **Branch:** `feature/graphdb-queries`
-- **Stage:** Stage 3 implementation complete; checkpoint commit is being created.
+- **Stage:** Stage 3 committed and pushed; PR 3 is ready to open against PR 2.
 
 ## Current status
 
@@ -15,6 +15,7 @@
 
 - Stage 1 commits: `adee66c`, `31b0611`, `8adb072`.
 - Stage 2 commits: `f348d00` (writer), `44ad8fc` (handoff).
+- Stage 3 commit: `b74ce76` (queries, normalizer, tests, docs, PR description).
 - Stage 3 adds `graphdb/queries.py`, `graphdb/normalize.py`, and query tests.
 - `pytest graphdb/tests -m "not integration"`: 48 passed, 3 deselected.
 - `pytest -q`: 90 passed, 3 skipped.
@@ -22,8 +23,6 @@
 - Live Aura queries and `EXPLAIN` index evidence: not executed.
 
 ## Next step
-
-After the Stage 3 checkpoint commit:
 
 1. Open PR 3 with base `feature/graphdb-writer`.
 2. Start Stage 4: propose FastAPI endpoints/models for owner review, then implement.
