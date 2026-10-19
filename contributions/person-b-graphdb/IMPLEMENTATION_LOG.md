@@ -227,3 +227,64 @@ regressions. The live idempotency proof remains pending a reachable Neo4j instan
 - [PR-0002](pr/PR-0002-graphdb-writer.md)
 
 **Next:** Stage 3 queries, index-usage evidence, and the stable RMI fallback contract.
+
+## 2026-10-19 — Stage 3: queries and fallback contract
+
+**Objective:** Implement the stable query contract for Person C and the future API: event lookup,
+date-range lookup, entity/date/topic chains, entity-name normalization, and index-evidence tooling.
+
+**Branch:** `feature/graphdb-queries`, stacked on `feature/graphdb-writer` because PR 1 and PR 2 are not
+merged yet.
+
+**Files created:**
+
+- `graphdb/queries.py`
+- `graphdb/normalize.py`
+- `graphdb/tests/test_normalize.py`
+- `graphdb/tests/test_queries_unit.py`
+- `graphdb/tests/test_queries_neo4j.py`
+- `contributions/person-b-graphdb/pr/PR-0003-graphdb-queries.md`
+
+**Files modified:**
+
+- `contributions/person-b-graphdb/README.md`
+- `contributions/person-b-graphdb/ARCHITECTURE.md`
+- `contributions/person-b-graphdb/IMPLEMENTATION_LOG.md`
+- `contributions/person-b-graphdb/TESTING.md`
+- `contributions/person-b-graphdb/SESSION_HANDOFF.md`
+
+**Reasoning:** Queries return plain dictionaries and use parameterized Cypher. Entity matching uses the
+exact normalized name so the `entity_name` index remains usable; the case-insensitive fallback is isolated
+and documented as a non-indexed scan. Chain traversal follows `LINKED_TO`, filters by `min_confidence`,
+caps depth at a code constant, limits results, and orders chronologically. `date_key` mirrors
+`pipeline/export.py`. `explain_events_in_date_range` exists specifically so the live integration test can
+record index evidence.
+
+**Alternatives considered:**
+
+- Case-insensitive `toLower` as the primary entity match: rejected because it prevents use of the required
+  index.
+- Importing `pipeline.extract.normalize_name`: rejected because it pulls spaCy into the backend; the small
+  copy is tested independently.
+- Parameterizing variable-length depth directly: rejected because Cypher range bounds are not parameters;
+  the code uses a constant cap plus a `length(path) <= $depth` filter.
+- Returning driver node/relationship objects: rejected by the stable-contract rule.
+
+**Checks run and results:**
+
+- `python -m compileall -q graphdb` — exit 0. [VERIFIED]
+- `pytest graphdb/tests -m "not integration" -q` — `48 passed, 3 deselected`. [VERIFIED]
+- `pytest -q` — `90 passed, 3 skipped`. [VERIFIED]
+- `pip check` — no broken requirements. [VERIFIED]
+- Live query round-trip and `EXPLAIN` index evidence — skipped without `NEO4J_URI`. [NOT EXECUTED]
+
+**Results and failures:** Unit coverage passes with no regressions. Query behavior against Neo4j and the
+`event_date` index plan remain unobserved until Aura is configured.
+
+**Links:**
+
+- [ADR-0004](decisions/ADR-0004-query-api-and-export-contracts.md)
+- [TESTING.md](TESTING.md)
+- [PR-0003](pr/PR-0003-graphdb-queries.md)
+
+**Next:** Stage 4 API proposal and implementation.

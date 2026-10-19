@@ -166,6 +166,35 @@ Writer configuration error: Missing required Neo4J environment variable(s)
 The Stage 2 integration test `test_writer_neo4j.py` was skipped because `NEO4J_URI` is unset. It is the
 live proof of idempotency and the global `PRECEDES` rebuild, including the out-of-order insertion case.
 
+### Stage 3 query results
+
+```text
+python -m compileall -q graphdb
+(exit 0)
+
+python -m pytest graphdb/tests -m "not integration" -q
+48 passed, 3 deselected
+
+python -m pytest -q
+90 passed, 3 skipped
+
+python -m pip check
+No broken requirements found.
+```
+
+Live query and index evidence are not executed without Aura. The prepared integration test
+`graphdb/tests/test_queries_neo4j.py::test_query_round_trip_and_index_evidence` writes the fixture, checks
+entity/date/topic query results, and asserts that the `EXPLAIN` plan for the date-range lookup contains
+`event_date`. Its output is required in this file before Stage 3 can be called live-verified.
+
+### Index-usage evidence
+
+| Query | Evidence | Status |
+|---|---|---|
+| `MATCH (e:Event) WHERE e.date >= date($start) AND e.date <= date($end) RETURN e.id` | `EXPLAIN` plan must contain `event_date` | **Not executable without Aura** |
+| `MATCH (n:Entity {name: $name})` | Exact name match uses `entity_name`; integration test exercises it | **Not executable without Aura** |
+| `MATCH (n:Entity) WHERE toLower(n.name) = toLower($name)` | Deliberately non-indexed fallback; documented in code | **By design** |
+
 ## 5. Results
 
 ### Passed
@@ -215,9 +244,15 @@ Stage 2 writer checks:
 - Writer CLI parsed the fixture and failed only at configuration, as expected without `.env`.
 - Live writer idempotency/out-of-order test: skipped without Neo4j.
 
+Stage 3 query checks:
+
+- `graphdb/tests -m "not integration"`: 48 passed, 3 deselected.
+- Full suite: 90 passed, 3 skipped.
+- Live query round-trip and `EXPLAIN` index evidence: not executable without Neo4j.
+
 ### Failed
 
-None observed in Stages 0–2.
+None observed in Stages 0–3.
 
 ### Skipped
 
@@ -227,14 +262,17 @@ None observed in Stages 0–2.
 - Docker Compose: not executable because Docker is unavailable in the current shell.
 - Writer integration (`test_writer_neo4j.py`): skipped because `NEO4J_URI` is unset. It exercises write →
   write again → out-of-order insertion and asserts the PRECEDES chain and counts.
+- Query integration (`test_queries_neo4j.py`): skipped because `NEO4J_URI` is unset. It exercises the query
+  round-trip and the date-range `EXPLAIN` index evidence.
 
 ### Not executable
 
 - Live `python -m graphdb.health`: requires a local `.env` with Aura settings.
 - Live `python -m graphdb.apply_schema`: same dependency; the mocked path is tested.
 - Docker Compose YAML parse: PyYAML is not installed and no new dependency was approved for parsing only.
-- Official pipeline sample round-trip: the writer exists (Stage 2), but a full end-to-end Aura round-trip is
-  Stage 6 and requires a configured `.env`.
+- Official pipeline sample round-trip: writer and queries exist (Stages 2–3), but a full end-to-end Aura
+  round-trip is Stage 6 and requires a configured `.env`.
+- Live `EXPLAIN`/`PROFILE` evidence: not executable without Aura; the integration test is prepared.
 
 ## 6. Evidence policy
 
