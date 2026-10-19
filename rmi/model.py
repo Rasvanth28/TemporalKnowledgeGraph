@@ -1,0 +1,222 @@
+"""A small two-stage Recursive Model Index with error-bound lookup.
+
+Stage 1 predicts a normalized position and therefore a bucket. Stage 2 models
+predict local positions inside their bucket. Each stage's maximum training
+error sizes a bounded correction window, so every training key is guaranteed to
+be found without a full scan. Out-of-range or unmatched keys report a fallback
+reason for the Neo4j path added in the integration PR.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Protocol
+
+import numpy as np
+
+from rmi.config import RMIConfig, RmiConfigError
+
+
+class NumericModel(Protocol):
+    def fit(self, x: np.ndarray, y: np.ndarray) -> None: ...
+    def predict(self, x: np.ndarray) -> np.ndarray: ...
+    def max_abs_error(self, x: np.ndarray, y: np.ndarray) -> float: ...
+
+
+class LinearModel:
+    """Least-squares linear model, safe for one-point buckets."""
+
+    slope_: float
+    intercept_: float
+
+    def fit(self, x: np.ndarray, y: np.ndarray) -> None:
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        if len(x) < 2:
+            self.slope_ = 0.0
+            self.intercept_ = float(y[0]) if len(y) else 0.0
+            return
+        self.slope_, self.intercept_ = np.polyfit(x, y, 1)
+
+    def predict(self, x: np.ndarray) -> np.ndarray:
+        return self.slope_ * np.asarray(x, dtype=float) + self.intercept_
+
+    def max_abs_error(self, x: np.ndarray, y: np.ndarray) -> float:
+        if len(x) == 0:
+            return 0.0
+        return float(np.max(np.abs(self.predict(x) - np.asarray(y, dtype=float))))
+
+
+class ConstantModel:
+    """Mean predictor, useful for config-driven model comparisons."""
+
+    value_: float
+
+    def fit(self, x: np.ndarray, y: np.ndarray) -> None:
+        self.value_ = float(np.mean(y)) if len(y) else 0.0
+
+    def predict(self, x: np.ndarray) -> np.ndarray:
+        x = np.asarray(x)
+        return np.full(x.shape, self.value_, dtype=float)
+
+    def max_abs_error(self, x: np.ndarray, y: np.ndarray) -> float:
+        if len(x) == 0:
+            return 0.0
+        return float(np.max(np.abs(self.predict(x) - np.asarray(y, dtype=float))))
+
+
+def make_model(name: str) -> NumericModel:
+    if name == "linear":
+        return LinearModel()
+    if name == "constant":
+        return ConstantModel()
+    raise RmiConfigError(f"unknown RMI model name: {name!r}")
+
+
+@dataclass(frozen=True)
+class LookupResult:
+    found: bool
+    index: int | None
+    candidates_checked: int
+    used_fallback: bool
+    reason: str | None = None
+
+
+class RMIModel:
+    """Two-stage RMI over sorted, unique integer keys."""
+
+    def __init__(self, config: RMIConfig | None = None):
+        self.config = config or RMIConfig()
+        self.config.validate()
+        if self.config.stage_count != 2:
+            raise RmiConfigError(
+                "this MVP implements exactly two stages; "
+                f"got {self.config.stage_count} stage_models"
+            )
+        self._fitted = False
+
+    def fit(self, keys: np.ndarray) -> "RMIModel":
+        keys = np.asarray(keys, dtype=np.int64)
+        if keys.ndim != 1 or len(keys) == 0:
+            raise ValueError("keys must be a non-empty 1-D array")
+        if np.any(keys[1:] < keys[:-1]):
+            raise ValueError("keys must be sorted in ascending order")
+        if len(np.unique(keys)) != len(keys):
+            raise ValueError("keys must be unique")
+
+        self.keys = keys
+        self.n = len(keys)
+        self.min_key = int(keys[0])
+        self.max_key = int(keys[-1])
+        self.positions = np.arange(self.n, dtype=np.int64)
+
+        self.bucket_count = min(self.config.bucket_count, self.n)
+        self.bucket_count = max(1, self.bucket_count)
+        boundaries = np.floor(np.linspace(0, self.n, self.bucket_count + 1)).astype(np.int64)
+        self.bucket_starts = boundaries[:-1]
+        self.bucket_ends = boundaries[1:]
+
+        # Stage 1: keys -> normalized position [0, 1].
+        y_stage1 = self.positions.astype(float) / max(self.n - 1, 1)
+        self.stage1 = make_model(self.config.stage_models[0])
+        self.stage1.fit(keys, y_stage1)
+
+        predicted_norm = np.clip(self.stage1.predict(keys), 0.0, 1.0)
+        predicted_bucket = np.clip(
+            (predicted_norm * self.bucket_count).astype(np.int64),
+            0,
+            self.bucket_count - 1,
+        )
+        true_bucket = np.clip(
+            np.searchsorted(self.bucket_starts, self.positions, side="right") - 1,
+            0,
+            self.bucket_count - 1,
+        )
+        self.stage1_error_buckets = int(np.max(np.abs(predicted_bucket - true_bucket)))
+
+        # Stage 2: one local-position model per bucket.
+        self.stage2_models: list[NumericModel] = []
+        self.stage2_errors = np.zeros(self.bucket_count, dtype=np.int64)
+        for bucket in range(self.bucket_count):
+            start, end = int(self.bucket_starts[bucket]), int(self.bucket_ends[bucket])
+            x_bucket = keys[start:end]
+            y_bucket = self.positions[start:end] - start
+            model = make_model(self.config.stage_models[1])
+            model.fit(x_bucket, y_bucket)
+            self.stage2_models.append(model)
+            self.stage2_errors[bucket] = int(np.ceil(model.max_abs_error(x_bucket, y_bucket)))
+
+        self._fitted = True
+        return self
+
+    def _require_fitted(self) -> None:
+        if not self._fitted:
+            raise RuntimeError("RMIModel must be fitted before lookup")
+
+    def lookup(self, key: int) -> LookupResult:
+        self._require_fitted()
+        key = int(key)
+
+        if key < self.min_key or key > self.max_key:
+            return LookupResult(
+                found=False,
+                index=None,
+                candidates_checked=0,
+                used_fallback=True,
+                reason="out_of_range",
+            )
+
+        predicted_norm = float(
+            np.clip(self.stage1.predict(np.array([key])), 0.0, 1.0)[0]
+        )
+        predicted_bucket = int(
+            min(max(int(predicted_norm * self.bucket_count), 0), self.bucket_count - 1)
+        )
+        first_bucket = max(0, predicted_bucket - self.stage1_error_buckets)
+        last_bucket = min(
+            self.bucket_count - 1, predicted_bucket + self.stage1_error_buckets
+        )
+
+        checked = 0
+        for bucket in range(first_bucket, last_bucket + 1):
+            start = int(self.bucket_starts[bucket])
+            end = int(self.bucket_ends[bucket])
+            local_prediction = float(self.stage2_models[bucket].predict(np.array([key]))[0])
+            global_prediction = int(round(start + local_prediction))
+            window = int(self.stage2_errors[bucket])
+            search_start = max(start, global_prediction - window)
+            search_end = min(end - 1, global_prediction + window)
+            for position in range(search_start, search_end + 1):
+                checked += 1
+                if int(self.keys[position]) == key:
+                    return LookupResult(
+                        found=True,
+                        index=position,
+                        candidates_checked=checked,
+                        used_fallback=False,
+                        reason=None,
+                    )
+
+        return LookupResult(
+            found=False,
+            index=None,
+            candidates_checked=checked,
+            used_fallback=True,
+            reason="not_found",
+        )
+
+    def lookup_many(self, keys: np.ndarray) -> list[LookupResult]:
+        return [self.lookup(int(key)) for key in np.asarray(keys)]
+
+    def summary(self) -> dict[str, object]:
+        self._require_fitted()
+        return {
+            "key_count": self.n,
+            "bucket_count": self.bucket_count,
+            "stage_models": list(self.config.stage_models),
+            "stage1_error_buckets": self.stage1_error_buckets,
+            "max_stage2_error": int(np.max(self.stage2_errors)) if self.bucket_count else 0,
+            "mean_stage2_error": float(np.mean(self.stage2_errors)) if self.bucket_count else 0.0,
+            "min_key": self.min_key,
+            "max_key": self.max_key,
+        }
