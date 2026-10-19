@@ -2,7 +2,7 @@
 
 - **Last updated:** 2026-10-19
 - **Branch:** `feature/graphdb-export-e2e`
-- **Stage:** Stages 0–6 implementation complete; live Aura verification pending.
+- **Stage:** Stages 0–6 implementation complete, committed, and pushed; live Aura verification pending.
 
 ## Current status
 
@@ -17,7 +17,7 @@
 - Writer: `f348d00`, `44ad8fc`.
 - Queries: `b74ce76`, `61d41af`.
 - API: `9c71874`, `aa87504`.
-- Export/e2e: committed at the final Stage 5/6 checkpoint.
+- Export/e2e: `1baa2d4` (export, end-to-end verification, final audit).
 - `pytest -q`: 106 passed, 5 skipped, 1 dependency warning.
 - `pip check`: no broken requirements.
 - `compileall graphdb`: exit 0.
