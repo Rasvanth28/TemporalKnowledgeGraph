@@ -2,7 +2,7 @@
 
 - **Last updated:** 2026-10-19
 - **Branch:** `feature/graphdb-api`
-- **Stage:** Stage 4 implementation complete; checkpoint commit is being created.
+- **Stage:** Stage 4 committed and pushed; PR 4 is ready to open against PR 3.
 
 ## Current status
 
@@ -17,6 +17,7 @@
 - Stage 1 commits: `adee66c`, `31b0611`, `8adb072`.
 - Stage 2 commits: `f348d00`, `44ad8fc`.
 - Stage 3 commits: `b74ce76`, `61d41af`.
+- Stage 4 commit: `9c71874` (API, tests, contract, Postman/curl, docs).
 - Stage 4 adds `graphdb/api.py`, `graphdb/tests/test_api.py`, and `contributions/person-b-graphdb/api/`.
 - `pytest graphdb/tests/test_api.py`: 10 passed.
 - `pytest -q`: 100 passed, 3 skipped, 1 dependency warning.
@@ -24,8 +25,6 @@
 - Postman collection JSON parses.
 
 ## Next step
-
-After the Stage 4 checkpoint commit:
 
 1. Open PR 4 with base `feature/graphdb-queries`.
 2. Start Stage 5: graph-to-flat event-key export for Person C.
