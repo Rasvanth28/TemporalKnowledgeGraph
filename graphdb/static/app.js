@@ -162,6 +162,7 @@ function sourceLine(articleId) {
 // ---------- status / dialog ----------
 function showStatus(content, { error = false } = {}) {
   const box = $("status");
+  box.classList.remove("note-ok", "note-warn");
   box.replaceChildren(...(Array.isArray(content) ? content : [content]));
   box.classList.toggle("error", error);
   box.classList.remove("hidden");
@@ -216,8 +217,26 @@ async function ask(prompt) {
     }
     hideStatus();
     renderGraph(result);
+    renderCoverage(result);
   } catch (err) {
     handleError(err);
+  }
+}
+
+// Is this a direct answer? Say so plainly, especially when nothing answers the whole question.
+function renderCoverage(result) {
+  const { direct = 0, related = 0 } = result.coverage || {};
+  const m = result.interpretation;
+  const asked = [...m.entities.map((e) => e.name), ...(m.keywords.length ? [m.keywords.join(" / ")] : [])];
+  const box = $("status");
+  if (!asked.length || !related) { hideStatus(); return; }
+  const what = listWords(asked.map((a) => `“${a}”`));
+  if (direct) {
+    showStatus(`${plural(direct, "event")} ${direct === 1 ? "answers" : "answer"} this directly (${what} together). ${plural(related, "related event")} ${related === 1 ? "is" : "are"} shown faded: they match only part of the question.`);
+    box.classList.add("note-ok");
+  } else {
+    showStatus(`No event in the sources mentions ${what} together, so nothing answers this directly. Showing ${plural(related, "related event")} that match part of the question. Adding sources that cover this subject would help.`);
+    box.classList.add("note-warn");
   }
 }
 
@@ -244,7 +263,7 @@ function renderGraph(result) {
   for (const l of links) { neighbors.get(l.source)?.add(l.target); neighbors.get(l.target)?.add(l.source); }
   const sources = result.sources || [];
   data = { nodes, links, byId, neighbors, sources, cite: new Map(sources.map((s, i) => [s.id, i + 1])),
-           interpretation: result.interpretation, query: result.query };
+           interpretation: result.interpretation, query: result.query, coverage: result.coverage };
   hovered = null; selected = null; selectedLink = null;
 
   $("workspace").classList.remove("hidden");
@@ -305,7 +324,10 @@ function renderSummary(summary) {
     ? (summary.start.slice(0, 7) === summary.end.slice(0, 7) ? monthFmt.format(asDate(summary.start)) : `${monthFmt.format(asDate(summary.start))} to ${monthFmt.format(asDate(summary.end))}`)
     : "";
   const used = summary.articles_used, total = summary.articles_total;
-  const intro = `What the sources say${subjectText(data.interpretation)}, ${span ? `${span}, ` : ""}based on ${used === total ? plural(used, "article") : `the ${used} most relevant of ${plural(total, "article")}`}.`;
+  const noDirect = (data.coverage?.direct ?? 1) === 0;
+  const intro = noDirect
+    ? `No source covers this exactly. Closest related coverage${span ? `, ${span}` : ""}, from ${plural(used, "article")}:`
+    : `What the sources say${subjectText(data.interpretation)}, ${span ? `${span}, ` : ""}based on ${used === total ? plural(used, "article") : `the ${used} most relevant of ${plural(total, "article")}`}.`;
 
   const body = paragraphs.map((paragraph) => {
     const p = el("p", {}, el("strong", { className: "month" }, `${monthFmt.format(asDate(`${paragraph.month}-01`))}. `));
@@ -367,14 +389,16 @@ function linkActive(l) {
 
 function drawNode(node, ctx, scale) {
   const set = focusSet();
-  const dim = set && !set.has(node.id);
+  const related = node.match === "related";
+  const dim = set ? !set.has(node.id) : false;
   const r = nodeRadius(node);
   const color = nodeColor(node);
-  ctx.globalAlpha = dim ? 0.15 : 1;
+  const base = related && !(set && set.has(node.id)) ? 0.35 : 1;  // partial matches stay visible but recede
+  ctx.globalAlpha = dim ? 0.15 : base;
   if (node === selected || node.matched) {
     ctx.beginPath(); ctx.arc(node.x, node.y, r + 3, 0, 2 * Math.PI);
     ctx.fillStyle = node === selected ? palette.accent : color; ctx.globalAlpha = dim ? 0.08 : 0.25; ctx.fill();
-    ctx.globalAlpha = dim ? 0.15 : 1;
+    ctx.globalAlpha = dim ? 0.15 : base;
   }
   ctx.beginPath(); ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
   if (node.kind === "topic") { ctx.lineWidth = 1.8; ctx.strokeStyle = color; ctx.fillStyle = palette.canvas; ctx.fill(); ctx.stroke(); }
@@ -477,6 +501,9 @@ function whyItems(node) {
   if (why.meaning) items.push("Its meaning is close to your question, even where the words differ.");
   if (why.in_date_range) items.push(`It falls within ${dateRangeText(data.interpretation)}.`);
   if (!items.length) items.push("It is connected to other events in these results.");
+  if (node.match === "related" && why.missing?.length) {
+    items.unshift(`Related, not a direct answer: it doesn't mention ${listWords(why.missing.map((x) => `“${x}”`))}.`);
+  }
   return items;
 }
 

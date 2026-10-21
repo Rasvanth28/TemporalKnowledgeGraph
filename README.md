@@ -46,6 +46,12 @@ The panel also lists the graph's events in date order. Search URLs are shareable
 The results are merged with reciprocal-rank fusion and filtered by the date range. The UI shows what was understood
 (names, dates, keywords) so results are explainable.
 
+**Direct answers vs related.** An event *answers directly* when it involves every name in the question and
+covers its topic words (at least one when names were given, otherwise at least half), counting plural forms and a small
+list of everyday equivalents (`RELATED_TERMS`: gas ~ petrol/fuel, price ~ cost, ...). Direct answers rank first and the
+summary is built only from them. Partial matches are shown faded as "related", and each says what it doesn't mention.
+When nothing answers directly, the page says so instead of presenting related news as the answer.
+
 **What happened (summary).** Above the graph, a short chronological summary of the results, grouped into monthly
 paragraphs, with every sentence cited [n] (`graphdb/summary.py`, returned as `summary` by `/graph`). It is *extractive*:
 built only from the articles' own headlines and key sentences, so nothing is invented. The most relevant articles are

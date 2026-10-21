@@ -109,3 +109,15 @@ def test_results_include_a_cited_summary(client):
     assert sentences and all(s["article_id"] in cited for s in sentences)
     months = [p["month"] for p in summary["paragraphs"]]
     assert months == sorted(months)
+
+
+def test_direct_answers_come_first_and_partial_matches_are_marked_related(client):
+    result = search_graph(client, "oil prices in Saudi Arabia", get_embedder())
+    events = [n for n in result["nodes"] if n["kind"] == "event"]
+    direct = [n for n in events if n["match"] == "direct"]
+    assert result["coverage"] == {"direct": len(direct), "related": len(events) - len(direct)}
+    assert direct and all(n["article_id"] == "a_opec" for n in direct)
+    assert all(n["why"]["missing"] for n in events if n["match"] == "related")
+    # The summary is built from the direct answers only.
+    cited = {s["article_id"] for p in result["summary"]["paragraphs"] for s in p["sentences"]}
+    assert cited == {"a_opec"}

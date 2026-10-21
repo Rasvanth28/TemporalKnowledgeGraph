@@ -110,3 +110,24 @@ def test_evidence_quote_shortens_on_a_word_boundary():
 def test_keyword_hits_match_simple_word_forms():
     from graphdb.search import keyword_hits
     assert keyword_hits(["rates", "decided", "oil"], "The Bank kept its rate; Opec decides") == ["rates", "decided"]
+
+
+def test_term_forms_cover_plurals_and_related_words():
+    from graphdb.search import term_covered
+    assert term_covered("price", "to help prop up prices")
+    assert term_covered("gas", "petrol costs rose")
+    assert term_covered("rates", "the bank rate was held")
+    assert not term_covered("gas", "the government gave a statement")  # "gas" is not a prefix of "gave"
+
+
+def test_answers_directly_needs_every_name_and_a_topic_word():
+    from graphdb.search import answers_directly
+    names = {"sa": "Saudi Arabia"}
+    assert answers_directly(names, ["gas", "price"], {"sa"}, "Saudi Arabia acted to help prop up prices") == (True, [])
+    direct, missing = answers_directly(names, ["gas", "price"], {"sa"}, "Saudi Arabia produced 9m barrels of oil a day")
+    assert not direct and missing == ["gas", "price"]
+    direct, missing = answers_directly(names, ["gas", "price"], set(), "Trump pledged to cut gas prices")
+    assert not direct and missing == ["Saudi Arabia"]
+    # Without names, at least half of the topic words must be covered.
+    assert answers_directly({}, ["gas", "price"], set(), "Trump pledged to cut gas prices")[0]
+    assert not answers_directly({}, ["mortgage", "costs", "homeowners"], set(), "mortgage approvals fell")[0]
