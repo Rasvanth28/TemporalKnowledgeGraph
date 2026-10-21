@@ -53,3 +53,11 @@ urllib3==2.7.0
 wasabi==1.1.3
 weasel==1.0.0
 wrapt==2.4.1
+
+# Graph DB & backend lane (new, installed and tested in .venv)
+fastapi==0.146.0
+neo4j==6.4.1
+opentelemetry-api==1.45.1
+pytz==2026.5
+starlette==1.9.0
+uvicorn==0.54.0

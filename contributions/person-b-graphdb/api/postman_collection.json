@@ -1,0 +1,119 @@
+{
+  "info": {
+    "name": "Temporal Knowledge Graph API",
+    "description": "Graph DB & Backend lane query API. No credentials are stored in this collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://127.0.0.1:8000"},
+    {"key": "event_id", "value": "test_fixture_evt_1"},
+    {"key": "entity_name", "value": "Test Fixture Bank"},
+    {"key": "topic", "value": "test-fixture interest rates"},
+    {"key": "start", "value": "2026-01-01"},
+    {"key": "end", "value": "2026-12-31"},
+    {"key": "min_confidence", "value": "0.0"},
+    {"key": "depth", "value": "3"},
+    {"key": "limit", "value": "100"}
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {"raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"]}
+      }
+    },
+    {
+      "name": "Event by id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/events/{{event_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["events", "{{event_id}}"]
+        }
+      }
+    },
+    {
+      "name": "Events in date range",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/events?start={{start}}&end={{end}}",
+          "host": ["{{base_url}}"],
+          "path": ["events"],
+          "query": [
+            {"key": "start", "value": "{{start}}"},
+            {"key": "end", "value": "{{end}}"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Chain by entity",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/chains/entity?name={{entity_name}}&min_confidence={{min_confidence}}&depth={{depth}}&limit={{limit}}",
+          "host": ["{{base_url}}"],
+          "path": ["chains", "entity"],
+          "query": [
+            {"key": "name", "value": "{{entity_name}}"},
+            {"key": "min_confidence", "value": "{{min_confidence}}"},
+            {"key": "depth", "value": "{{depth}}"},
+            {"key": "limit", "value": "{{limit}}"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Chain by topic",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/chains/topic?topic={{topic}}&min_confidence={{min_confidence}}&depth={{depth}}&limit={{limit}}",
+          "host": ["{{base_url}}"],
+          "path": ["chains", "topic"],
+          "query": [
+            {"key": "topic", "value": "{{topic}}"},
+            {"key": "min_confidence", "value": "{{min_confidence}}"},
+            {"key": "depth", "value": "{{depth}}"},
+            {"key": "limit", "value": "{{limit}}"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Chain by date range",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/chains/date-range?start={{start}}&end={{end}}&min_confidence={{min_confidence}}&depth={{depth}}&limit={{limit}}",
+          "host": ["{{base_url}}"],
+          "path": ["chains", "date-range"],
+          "query": [
+            {"key": "start", "value": "{{start}}"},
+            {"key": "end", "value": "{{end}}"},
+            {"key": "min_confidence", "value": "{{min_confidence}}"},
+            {"key": "depth", "value": "{{depth}}"},
+            {"key": "limit", "value": "{{limit}}"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "OpenAPI",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {"raw": "{{base_url}}/openapi.json", "host": ["{{base_url}}"], "path": ["openapi.json"]}
+      }
+    }
+  ]
+}

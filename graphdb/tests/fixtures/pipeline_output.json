@@ -1,0 +1,132 @@
+{
+  "results": [
+    {
+      "article": {
+        "id": "test_fixture_art_1",
+        "title": "Test Fixture: Central bank raises rates",
+        "date": "2026-03-10",
+        "source": "synthetic test fixture",
+        "url": "https://example.invalid/test-fixture/1"
+      },
+      "entities": [
+        {"id": "test_fixture_ent_bank", "name": "Test Fixture Bank", "type": "ORG"},
+        {"id": "test_fixture_ent_committee", "name": "Test Fixture Committee", "type": "ORG"}
+      ],
+      "events": [
+        {
+          "event": {
+            "id": "test_fixture_evt_1",
+            "description": "Test Fixture Bank raised interest rates",
+            "date": "2026-03-01",
+            "type": "policy_change",
+            "date_source": "explicit"
+          },
+          "entities": [
+            {"id": "test_fixture_ent_bank", "name": "Test Fixture Bank", "type": "ORG"}
+          ],
+          "topic": {"name": "test-fixture interest rates"},
+          "source_text": "Test Fixture Bank raised interest rates on 1 March 2026."
+        },
+        {
+          "event": {
+            "id": "test_fixture_evt_2",
+            "description": "Test Fixture Bank signalled another increase",
+            "date": "2026-03-20",
+            "type": "policy_change",
+            "date_source": "explicit"
+          },
+          "entities": [
+            {"id": "test_fixture_ent_bank", "name": "Test Fixture Bank", "type": "ORG"},
+            {"id": "test_fixture_ent_committee", "name": "Test Fixture Committee", "type": "ORG"}
+          ],
+          "topic": {"name": "test-fixture interest rates"},
+          "source_text": "Test Fixture Bank signalled another increase on 20 March 2026."
+        }
+      ]
+    },
+    {
+      "article": {
+        "id": "test_fixture_art_2",
+        "title": "Test Fixture: Statistics office reports inflation",
+        "date": "2026-05-05",
+        "source": "synthetic test fixture",
+        "url": "https://example.invalid/test-fixture/2"
+      },
+      "entities": [
+        {"id": "test_fixture_ent_stats", "name": "Test Fixture Statistics Office", "type": "ORG"}
+      ],
+      "events": [
+        {
+          "event": {
+            "id": "test_fixture_evt_3",
+            "description": "Test Fixture Statistics Office reported inflation",
+            "date": "2026-05-01",
+            "type": "economic",
+            "date_source": "explicit"
+          },
+          "entities": [
+            {"id": "test_fixture_ent_stats", "name": "Test Fixture Statistics Office", "type": "ORG"}
+          ],
+          "topic": {"name": "test-fixture inflation"},
+          "source_text": "The Test Fixture Statistics Office reported inflation on 1 May 2026."
+        }
+      ]
+    },
+    {
+      "article": {
+        "id": "test_fixture_art_3",
+        "title": "Test Fixture: Central bank holds rates",
+        "date": "2026-01-15",
+        "source": "synthetic test fixture",
+        "url": "https://example.invalid/test-fixture/3"
+      },
+      "entities": [
+        {"id": "test_fixture_ent_bank", "name": "Test Fixture Bank", "type": "ORG"},
+        {"id": "test_fixture_ent_committee", "name": "Test Fixture Committee", "type": "ORG"}
+      ],
+      "events": [
+        {
+          "event": {
+            "id": "test_fixture_evt_4",
+            "description": "Test Fixture Bank held rates steady",
+            "date": "2026-01-10",
+            "type": "policy_change",
+            "date_source": "explicit"
+          },
+          "entities": [
+            {"id": "test_fixture_ent_bank", "name": "Test Fixture Bank", "type": "ORG"},
+            {"id": "test_fixture_ent_committee", "name": "Test Fixture Committee", "type": "ORG"}
+          ],
+          "topic": {"name": "test-fixture interest rates"},
+          "source_text": "Test Fixture Bank held rates steady on 10 January 2026."
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from_event_id": "test_fixture_evt_4",
+      "to_event_id": "test_fixture_evt_1",
+      "confidence": 0.8,
+      "reason": "shared_entities+similar_topic"
+    },
+    {
+      "from_event_id": "test_fixture_evt_1",
+      "to_event_id": "test_fixture_evt_2",
+      "confidence": 0.9,
+      "reason": "shared_entities+similar_topic"
+    },
+    {
+      "from_event_id": "test_fixture_evt_1",
+      "to_event_id": "test_fixture_evt_3",
+      "confidence": 0.4,
+      "reason": "similar_topic"
+    },
+    {
+      "from_event_id": "test_fixture_evt_2",
+      "to_event_id": "test_fixture_evt_3",
+      "confidence": 0.35,
+      "reason": "similar_topic"
+    }
+  ]
+}
