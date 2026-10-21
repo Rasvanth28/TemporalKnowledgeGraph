@@ -27,18 +27,24 @@ from neo4j.exceptions import ClientError
 from rapidfuzz import fuzz
 
 from common.embed import Embedder
+from common.names import normalize_name
 from graphdb.connection import Neo4jClient
-from graphdb.search_index import EVENT_TEXT_INDEX, EVENT_VECTOR_INDEX
+from graphdb.search_index import ENTITY_NAME_INDEX, EVENT_TEXT_INDEX, EVENT_VECTOR_INDEX
 from graphdb.summary import build_summary
 
 log = logging.getLogger(__name__)
 
 DEFAULT_EVENTS = 30
 MAX_EVENTS = 100
-# Neo4j's vector index reports cosine rescaled to [0, 1] as (1 + cos) / 2. Calibrated on the Guardian
-# sample: off-topic prompts ("chocolate cake recipe", "football transfers", gibberish) top out at
-# 0.57-0.65; on-topic prompts start around 0.78. Below the floor, "nearest" events are noise.
-MIN_VECTOR_SCORE = 0.70
+# Neo4j's vector index reports cosine rescaled to [0, 1] as (1 + cos) / 2. What counts as "similar"
+# depends on the corpus: the more events, the closer the nearest one is to *anything*. Measured: on 74
+# events gibberish reached 0.57 and real questions ~0.78; on 26k events gibberish reaches 0.74 and
+# real questions 0.81-0.89. So the floor is measured, not fixed: the best score that nonsense probes
+# get on the current corpus (what noise looks like here), plus a margin.
+NULL_PROBES = ("zzqx florp vbnm", "asdf qwerty uiop", "lorem ipsum dolor sit")
+NULL_MARGIN = 0.05
+MIN_VECTOR_SCORE = 0.55  # absolute lower bound, e.g. for an almost empty graph
+_floor_cache: dict[tuple, float] = {}
 # Scores also shift from prompt to prompt, so matches are kept relative to the best one; tighter when
 # names/keywords already matched, because meaning should then only add near-equivalents.
 MEANING_GAP_WITH_LEXICAL = 0.08
@@ -151,15 +157,17 @@ def parse_dates(prompt: str, today: dt.date) -> tuple[dt.date | None, dt.date | 
 # ---------- entities ----------
 
 def match_entities(prompt: str, entities: list[dict[str, Any]], min_score: float = 88) -> list[dict[str, Any]]:
-    """Entities whose names appear in the prompt, exactly or fuzzily, longest first.
+    """Entities whose names appear in the prompt, exactly or fuzzily.
 
-    A name is skipped when its match lies inside a longer matched name ("Bank" in "Bank of England").
-    Short all-caps names (UK, US, EU) must appear in capitals, so the word "us" does not match US.
+    Overlapping matches are resolved in this order: exact before fuzzy (so a misspelt entity like
+    "Saudia Arabia" never beats the real "Saudi Arabia"), then longer names ("Bank of England" over
+    "Bank"), then names seen in more events. Short all-caps names (UK, US, EU) must appear in
+    capitals, so the word "us" does not match US.
     """
 
     lowered = prompt.lower()
-    found: list[tuple[int, int, dict[str, Any]]] = []
-    for entity in sorted(entities, key=lambda e: -len(e.get("name") or "")):
+    matches: list[tuple[bool, int, int, tuple[int, int], dict[str, Any]]] = []
+    for entity in entities:
         name = (entity.get("name") or "").strip()
         if len(name) < 2:
             continue
@@ -180,10 +188,15 @@ def match_entities(prompt: str, entities: list[dict[str, Any]], min_score: float
                 if aligned is None or aligned.score < min_score:
                     continue
                 span, score = (aligned.dest_start, aligned.dest_end), float(aligned.score)
-        if any(s <= span[0] and span[1] <= e for s, e, _ in found):
-            continue
-        found.append((span[0], span[1], {**entity, "score": round(score, 1), "span": span}))
-    return [entity for _, _, entity in sorted(found, key=lambda f: f[0])]
+        matches.append((score == 100.0, len(name), int(entity.get("events") or 0), span,
+                        {**entity, "score": round(score, 1), "span": span}))
+
+    accepted: list[tuple[tuple[int, int], dict[str, Any]]] = []
+    for exact, length, events, span, entity in sorted(matches, key=lambda m: (not m[0], -m[1], -m[2])):
+        if any(span[0] < e and s < span[1] for (s, e), _ in accepted):
+            continue  # overlaps a better match
+        accepted.append((span, entity))
+    return [entity for _, entity in sorted(accepted, key=lambda a: a[0][0])]
 
 
 # ---------- keywords ----------
@@ -237,7 +250,60 @@ def fuse(rankings: dict[str, list[str]], weights: dict[str, float] = SOURCE_WEIG
 
 _DATE_FILTER = "($start IS NULL OR e.date >= date($start)) AND ($end IS NULL OR e.date <= date($end))"
 
-_ALL_ENTITIES = "MATCH (n:Entity) RETURN n.id AS id, n.name AS name, n.type AS type LIMIT 50000"
+_ALL_ENTITIES = "MATCH (n:Entity) RETURN n.id AS id, n.name AS name, n.type AS type"
+
+# Candidate names for a prompt, from the full-text index on Entity.name: only names sharing a word
+# with the prompt (with one-letter typo tolerance) are fetched, instead of every name in the graph.
+_ENTITY_CANDIDATES = f"""
+CALL db.index.fulltext.queryNodes('{ENTITY_NAME_INDEX}', $q, {{limit: $k}}) YIELD node AS n
+OPTIONAL MATCH (e:Event)-[:INVOLVES]->(n)
+RETURN n.id AS id, n.name AS name, n.type AS type, count(e) AS events
+"""
+# A one-word "name" seen in fewer events than this is usually entity-detection noise ("Price" tagged as
+# an organisation): it stays a topic word instead. London, Opec, etc. appear in many events.
+MIN_EVENTS_SINGLE_WORD = 2
+ENTITY_CANDIDATES = 200
+
+
+def entity_query(prompt: str) -> str:
+    """Lucene query over the prompt's words: exact for short words, fuzzy (~1) for longer ones."""
+
+    words = []
+    for word in dict.fromkeys(re.findall(r"[A-Za-z0-9]+", prompt)):
+        lowered = word.lower()
+        if lowered in STOPWORDS or len(word) < 2:
+            continue
+        escaped = _LUCENE_SPECIAL.sub(r"\\\1", lowered)
+        words.append(f"{escaped}~1" if len(word) >= 5 else escaped)
+    return " ".join(words)
+
+
+def clean_candidates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop one-word noise names; merge names that differ only by invisible characters (keep the busiest)."""
+
+    best: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        name = normalize_name(row.get("name") or "")
+        events = int(row.get("events") or 0)
+        if not name or (" " not in name and events < MIN_EVENTS_SINGLE_WORD):
+            continue
+        key = name.lower()
+        if key not in best or events > best[key]["events"]:
+            best[key] = {**row, "name": name, "events": events}
+    return list(best.values())
+
+
+def candidate_entities(client: Neo4jClient, prompt: str) -> list[dict[str, Any]]:
+    query = entity_query(prompt)
+    if not query:
+        return []
+    try:
+        rows = client.run(_ENTITY_CANDIDATES, {"q": query, "k": ENTITY_CANDIDATES})
+        return clean_candidates(rows)
+    except ClientError as exc:
+        # Index not created yet (fresh deploy, before the first ingestion): scan every name instead.
+        log.warning("entity name index unavailable, scanning all names", extra={"fields": {"error": exc.code}})
+        return client.run(_ALL_ENTITIES)
 
 _BY_ENTITY = f"""
 MATCH (e:Event)-[:INVOLVES]->(n:Entity) WHERE n.id IN $ids AND {_DATE_FILTER}
@@ -314,11 +380,28 @@ def _optional(client: Neo4jClient, query: str, params: dict[str, Any], what: str
         return []
 
 
-def meaning_cutoff(scores: list[float], lexical_hits: bool) -> float:
+def meaning_cutoff(scores: list[float], lexical_hits: bool, floor: float = MIN_VECTOR_SCORE) -> float:
     if not scores:
-        return MIN_VECTOR_SCORE
+        return floor
     gap = MEANING_GAP_WITH_LEXICAL if lexical_hits else MEANING_GAP_ALONE
-    return max(MIN_VECTOR_SCORE, max(scores) - gap)
+    return max(floor, max(scores) - gap)
+
+
+def meaning_floor(client: Neo4jClient, embedder: Embedder) -> float:
+    """Noise level for meaning search on the current corpus (cached until the event count changes)."""
+
+    events = int(client.run("MATCH (e:Event) RETURN count(e) AS n")[0]["n"])
+    key = (client.config.uri, client.config.database, embedder.name, events)
+    if key not in _floor_cache:
+        noise = 0.0
+        for probe in NULL_PROBES:
+            rows = _optional(client, _BY_MEANING, {"start": None, "end": None, "vector": embedder.encode([probe])[0],
+                                                   "k": 1, "min_score": 0.0}, "meaning")
+            noise = max([noise] + [r["score"] for r in rows])
+        _floor_cache.clear()  # one corpus at a time
+        _floor_cache[key] = max(MIN_VECTOR_SCORE, round(noise + NULL_MARGIN, 4))
+        log.info("meaning floor measured", extra={"fields": {"events": events, "floor": _floor_cache[key]}})
+    return _floor_cache[key]
 
 
 def search_graph(client: Neo4jClient, prompt: str, embedder: Embedder | None = None,
@@ -331,7 +414,7 @@ def search_graph(client: Neo4jClient, prompt: str, embedder: Embedder | None = N
     limit = max(1, min(int(limit), MAX_EVENTS))
     today = today or dt.date.today()
 
-    meaning = interpret(prompt, client.run(_ALL_ENTITIES), today)
+    meaning = interpret(prompt, candidate_entities(client, prompt), today)
     dates = {"start": meaning.start.isoformat() if meaning.start else None,
              "end": meaning.end.isoformat() if meaning.end else None}
     k = max(limit * 3, 50)
@@ -343,8 +426,9 @@ def search_graph(client: Neo4jClient, prompt: str, embedder: Embedder | None = N
         rankings["keyword"] = _ids(_optional(client, _BY_KEYWORD, {**dates, "q": lucene_query(meaning.keywords), "k": k}, "keyword"))
     if embedder is not None:
         vector = embedder.encode([prompt])[0]
-        rows = _optional(client, _BY_MEANING, {**dates, "vector": vector, "k": k, "min_score": MIN_VECTOR_SCORE}, "meaning")
-        cutoff = meaning_cutoff([r["score"] for r in rows], any(rankings.values()))
+        floor = meaning_floor(client, embedder)
+        rows = _optional(client, _BY_MEANING, {**dates, "vector": vector, "k": k, "min_score": floor}, "meaning")
+        cutoff = meaning_cutoff([r["score"] for r in rows], any(rankings.values()), floor)
         rankings["meaning"] = [str(r["id"]) for r in rows if r["score"] >= cutoff]
     if not any(rankings.values()) and (meaning.start or meaning.end):
         rankings["date"] = _ids(client.run(_BY_DATE_ONLY, {**dates, "k": limit}))

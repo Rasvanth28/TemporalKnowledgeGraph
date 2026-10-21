@@ -63,6 +63,7 @@ const cleanTopic = (name) => (name || "").replace(/['’‘]s\b/g, " ").replace(
 
 // ---------- state ----------
 let graph = null;
+let layoutSpread = 1;     // grows with node count (see renderGraph)
 let data = null;          // { nodes, links, byId, neighbors, sources, cite, interpretation, query }
 let hovered = null;
 let selected = null;      // node
@@ -278,9 +279,9 @@ function renderGraph(result) {
       .nodeLabel(() => "")
       .nodeCanvasObject(drawNode)
       .nodePointerAreaPaint((n, color, ctx) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(n.x, n.y, nodeRadius(n) + 2, 0, 2 * Math.PI); ctx.fill(); })
-      .linkColor((l) => (linkActive(l) === false ? "rgba(128,128,128,0.06)" : l.kind === "linked_to" ? palette.accent : palette.edge))
-      .linkWidth((l) => (l === selectedLink ? 4 : (l.kind === "linked_to" ? 0.6 + 2 * (l.confidence || 0) : 0.6) * (linkActive(l) ? 1.8 : 1)))
-      .linkDirectionalArrowLength((l) => (l.kind === "linked_to" ? 4 : 0))
+      .linkColor((l) => (linkActive(l) === false ? "rgba(128,128,128,0.1)" : l.kind === "linked_to" ? palette.accent : palette.edge))
+      .linkWidth((l) => (l === selectedLink ? 4.5 : (l.kind === "linked_to" ? 1.4 + 2.5 * (l.confidence || 0) : 1.1) * (linkActive(l) ? 1.7 : 1)))
+      .linkDirectionalArrowLength((l) => (l.kind === "linked_to" ? 6 : 0))
       .linkDirectionalArrowRelPos(0.9)
       .linkHoverPrecision(6)
       .linkLabel(linkTooltip)
@@ -289,18 +290,43 @@ function renderGraph(result) {
       .onNodeClick((n) => select(n))
       .onBackgroundClick(() => select(null))
       .autoPauseRedraw(false) // keep redrawing so hover highlights update after the layout settles
-      .cooldownTicks(150)
-      .onEngineStop(() => { if (data && !data.fitted) { data.fitted = true; graph.zoomToFit(500, 50); } });
-    graph.d3Force("charge").strength(-70);
-    graph.d3Force("link").distance((l) => (l.kind === "linked_to" ? 55 : l.kind === "about" ? 40 : 32));
+      // Speed: most of the layout is computed before the first paint (warm-up ticks are not animated),
+      // so the graph appears already arranged and only settles briefly on screen.
+      .cooldownTicks(40)
+      .onEngineStop(() => { if (data && !data.fitted) { data.fitted = true; graph.zoomToFit(300, 50); } });
     // Gentle pull toward the centre (like Obsidian's "center force") so unconnected pieces stay nearby.
     let gravityNodes = [];
-    const gravity = (alpha) => { for (const n of gravityNodes) { n.vx -= n.x * 0.06 * alpha; n.vy -= n.y * 0.06 * alpha; } };
+    const gravity = (alpha) => { for (const n of gravityNodes) { n.vx -= n.x * 0.04 * alpha; n.vy -= n.y * 0.04 * alpha; } };
     gravity.initialize = (ns) => { gravityNodes = ns; };
     graph.d3Force("gravity", gravity);
+    // Collision: dots (plus room for their label) never overlap. O(n^2) is fine for a few hundred nodes.
+    let collideNodes = [];
+    const collide = () => {
+      const pad = layoutSpread * 5;
+      for (let i = 0; i < collideNodes.length; i++) {
+        const a = collideNodes[i];
+        for (let j = i + 1; j < collideNodes.length; j++) {
+          const b = collideNodes[j];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const min = nodeRadius(a) + nodeRadius(b) + pad;
+          const d2 = dx * dx + dy * dy;
+          if (d2 > 0 && d2 < min * min) {
+            const d = Math.sqrt(d2), push = (min - d) / d * 0.5;
+            a.x -= dx * push; a.y -= dy * push; b.x += dx * push; b.y += dy * push;
+          }
+        }
+      }
+    };
+    collide.initialize = (ns) => { collideNodes = ns; };
+    graph.d3Force("collide", collide);
     new ResizeObserver(() => graph.width(container.clientWidth).height(container.clientHeight)).observe(container);
     window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readPalette(); graph.refresh?.(); });
   }
+  // More nodes -> more room: repulsion, link length and collision padding grow with the graph.
+  layoutSpread = Math.min(3.5, 1 + Math.max(0, nodes.length - 40) / 60);
+  graph.d3Force("charge").strength(-80 * layoutSpread).distanceMax(250 * layoutSpread);
+  graph.d3Force("link").distance((l) => (l.kind === "linked_to" ? 60 : l.kind === "about" ? 42 : 36) * Math.sqrt(layoutSpread));
+  graph.warmupTicks(Math.min(300, 80 + nodes.length));
   graph.width(container.clientWidth).height(container.clientHeight).graphData({ nodes, links });
   renderSummary(result.summary || {});
   showOverview();

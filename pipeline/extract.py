@@ -86,12 +86,7 @@ def get_id(text : str) -> str:
     return str(unique_id)
 
 
-def normalize_name(name: str) -> str:
-    # "The Federal Reserve" and "Federal Reserve" must become the same graph node.
-    name = " ".join(name.split())
-    name = re.sub(r"^the\s+", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"['’]s$", "", name)
-    return name
+from common.names import normalize_name  # noqa: E402  (shared with graphdb lookups)
 
 
 def extract_policy_entities(text:str) -> list[Entity]:

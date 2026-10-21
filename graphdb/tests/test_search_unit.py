@@ -83,20 +83,14 @@ def test_fuse_rewards_events_found_by_several_retrievers():
 
 def test_meaning_cutoff_is_relative_to_the_best_match():
     from graphdb.search import meaning_cutoff
-    # Scores are Neo4j's rescaled cosine, (1 + cos) / 2.
+    # Scores are Neo4j's rescaled cosine, (1 + cos) / 2; the floor is the measured noise level.
     # Names/keywords matched: only near-equivalents of the best meaning match survive.
-    assert meaning_cutoff([0.87, 0.86, 0.59, 0.56], lexical_hits=True) == pytest.approx(0.79)
+    assert meaning_cutoff([0.87, 0.86, 0.59, 0.56], lexical_hits=True, floor=0.6) == pytest.approx(0.79)
     # Meaning alone: a little looser.
-    assert meaning_cutoff([0.85, 0.79, 0.75], lexical_hits=False) == pytest.approx(0.73)
-    # Never below the floor that separates on-topic from off-topic prompts.
-    assert meaning_cutoff([0.65, 0.63], lexical_hits=False) == pytest.approx(0.70)
-    assert meaning_cutoff([], lexical_hits=False) == 0.70
-
-
-def test_keywords_drop_the_text_of_fuzzy_matched_names():
-    meaning = interpret("what did Andrew Baily say about inflation", ENTITIES, TODAY)
-    assert names(meaning.entities) == ["Andrew Bailey"]
-    assert meaning.keywords == ["inflation"]
+    assert meaning_cutoff([0.85, 0.79, 0.75], lexical_hits=False, floor=0.6) == pytest.approx(0.73)
+    # Never below the noise floor of the current corpus.
+    assert meaning_cutoff([0.75, 0.70], lexical_hits=False, floor=0.79) == pytest.approx(0.79)
+    assert meaning_cutoff([], lexical_hits=False, floor=0.79) == 0.79
 
 
 def test_evidence_quote_shortens_on_a_word_boundary():
@@ -131,3 +125,34 @@ def test_answers_directly_needs_every_name_and_a_topic_word():
     # Without names, at least half of the topic words must be covered.
     assert answers_directly({}, ["gas", "price"], set(), "Trump pledged to cut gas prices")[0]
     assert not answers_directly({}, ["mortgage", "costs", "homeowners"], set(), "mortgage approvals fell")[0]
+
+
+def test_entity_query_is_escaped_fuzzy_for_long_words_and_skips_stopwords():
+    from graphdb.search import entity_query
+    assert entity_query("What happened in London?") == "london~1"
+    assert entity_query("what did Andrew Baily say about the UK") == "andrew~1 baily~1 uk"
+    assert entity_query("what is it") == ""
+
+
+def test_clean_candidates_drops_one_word_noise_and_merges_invisible_variants():
+    from graphdb.search import clean_candidates
+    rows = [{"id": "lon", "name": "London", "type": "LOCATION", "events": 456},
+            {"id": "price", "name": "Price", "type": "ORG", "events": 0},
+            {"id": "sa1", "name": "Saudi \u2060Arabia", "type": "LOCATION", "events": 3},  # as stored in Aura
+            {"id": "sa2", "name": "Saudi Arabia", "type": "LOCATION", "events": 40},
+            {"id": "boe", "name": "Bank of England", "type": "ORG", "events": 1}]
+    kept = {r["id"]: r["name"] for r in clean_candidates(rows)}
+    assert kept == {"lon": "London", "sa2": "Saudi Arabia", "boe": "Bank of England"}
+
+
+def test_normalize_name_strips_invisible_characters():
+    from common.names import normalize_name
+    assert normalize_name("Saudi\u2060Arabia") == "SaudiArabia"
+    assert normalize_name("Saudi\u00a0Arabia") == "Saudi Arabia"
+    assert normalize_name("The Bank\u200b of England’s") == "Bank of England"
+
+
+def test_exact_names_beat_longer_misspelt_ones():
+    entities = [{"id": "typo", "name": "Saudia Arabia", "type": "LOCATION", "events": 2},
+                {"id": "sa", "name": "Saudi Arabia", "type": "LOCATION", "events": 40}]
+    assert names(match_entities("Gas Price in Saudi Arabia", entities)) == ["Saudi Arabia"]

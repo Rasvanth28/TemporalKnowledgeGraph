@@ -1,27 +1,15 @@
-"""Entity-name normalization mirrored from Person A's pipeline.
+"""Entity-name normalization for graph lookups.
 
-``pipeline/extract.py`` owns the canonical implementation. This module is a
-small, tested backend copy so ``graphdb`` does not import spaCy-dependent
-pipeline modules. If the canonical function moves into ``common/``, this copy
-should be replaced with the shared one.
+The canonical implementation now lives in ``common/names.py`` (shared with the pipeline, which
+writes the names), so lookups and writes can never drift apart.
 """
 
 from __future__ import annotations
 
-import re
-
-_LEADING_THE = re.compile(r"^the\s+", flags=re.IGNORECASE)
-_POSSESSIVE = re.compile(r"['’]s$")
+from common.names import normalize_name
 
 
 def normalize_entity_name(name: str) -> str:
-    """Apply the same normalization Person A uses for entity names.
+    """Same normalization the pipeline applies when it stores entity names."""
 
-    The function is case-preserving. It collapses whitespace, strips a leading
-    case-insensitive ``"the"``, and strips a trailing possessive.
-    """
-
-    result = " ".join(name.split())
-    result = _LEADING_THE.sub("", result)
-    result = _POSSESSIVE.sub("", result)
-    return result
+    return normalize_name(name)
