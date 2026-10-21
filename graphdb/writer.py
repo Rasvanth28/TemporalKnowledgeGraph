@@ -319,6 +319,8 @@ def build_write_plan(output: PipelineOutput) -> WritePlan:
                     "date": event.date.isoformat(),
                     "type": event.type,
                     "date_source": event.date_source,
+                    # Kept so later ingestion runs can score new events against this one.
+                    "source_text": extracted.source_text,
                 },
                 "id",
                 "Event",
@@ -400,9 +402,9 @@ _WRITE_EVENTS = """
 UNWIND $rows AS row
 MERGE (e:Event {id: row.id})
 ON CREATE SET e.description = row.description, e.date = date(row.date), e.type = row.type,
-              e.date_source = row.date_source, e._person_b_batch = $batch
+              e.date_source = row.date_source, e.source_text = row.source_text, e._person_b_batch = $batch
 ON MATCH SET e.description = row.description, e.date = date(row.date), e.type = row.type,
-             e.date_source = row.date_source
+             e.date_source = row.date_source, e.source_text = row.source_text
 """
 
 _WRITE_ENTITIES = """

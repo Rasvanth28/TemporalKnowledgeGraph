@@ -1,0 +1,16 @@
+[project]
+name = "temporal-knowledge-graph"
+version = "0.2.0"
+requires-python = ">=3.12"
+
+[tool.ruff]
+target-version = "py312"
+extend-exclude = ["Practice"]
+
+[tool.ruff.lint]
+# Ruff defaults (pyflakes + syntax/statement errors): catches real bugs without restyling the codebase.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.pytest.ini_options]
+addopts = "-p no:cacheprovider"
+filterwarnings = ["ignore::DeprecationWarning:starlette.*"]

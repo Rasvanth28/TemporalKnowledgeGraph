@@ -1,0 +1,30 @@
+# Render Blueprint: the read API as a Docker web service.
+# Setup: Render dashboard -> New -> Blueprint -> pick this repo. Fill the `sync: false` values when prompted.
+services:
+  - type: web
+    name: temporal-knowledge-graph-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    branch: main
+    # Deploy only after GitHub checks (CI) pass on the commit.
+    autoDeployTrigger: checksPass
+    # /health returns 503 when Neo4j is unreachable, so a broken deploy never replaces a working one.
+    healthCheckPath: /health
+    envVars:
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USER
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: NEO4J_DATABASE
+        value: neo4j
+      # Comma-separated client keys. Render generates the first one; read it in the dashboard.
+      - key: API_KEYS
+        generateValue: true
+      # Comma-separated browser origins allowed to call the API (leave empty for server-to-server use).
+      - key: API_CORS_ORIGINS
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO

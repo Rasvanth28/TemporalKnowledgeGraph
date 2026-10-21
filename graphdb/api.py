@@ -11,13 +11,20 @@ so tests can inject a fake client.
 from __future__ import annotations
 
 import datetime as dt
+import logging
+import os
+import secrets
+import time
+from collections.abc import Sequence
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from common.log import configure_logging
 from graphdb.config import Neo4jConfig, load_neo4j_config
 from graphdb.connection import Neo4jClient
 from graphdb.health import check_health
@@ -31,7 +38,17 @@ from graphdb.queries import (
 )
 
 API_TITLE = "Temporal Knowledge Graph API"
-API_VERSION = "0.1.0"
+API_VERSION = "0.2.0"
+
+log = logging.getLogger("graphdb.api")
+
+
+def _env_list(name: str) -> list[str]:
+    return [item.strip() for item in os.environ.get(name, "").split(",") if item.strip()]
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes"}
 
 
 class EntityModel(BaseModel):
@@ -96,15 +113,34 @@ _FAKE_TEST_CONFIG = Neo4jConfig(
 def create_app(
     client: Neo4jClient | None = None,
     config: Neo4jConfig | None = None,
+    api_keys: Sequence[str] | None = None,
+    cors_origins: Sequence[str] | None = None,
 ) -> FastAPI:
     """Create the FastAPI app.
 
     When ``client`` is supplied (tests), it is used directly and closed by the
     caller. Otherwise a real client is created from the environment at startup.
+
+    Every route except ``/health`` requires an ``X-API-Key`` header matching one of
+    ``api_keys`` (default: comma-separated ``API_KEYS``). Without keys the app fails
+    closed: a real deployment refuses to start unless ``API_AUTH_DISABLED=true``.
+    An injected test client with no keys runs unauthenticated.
     """
+
+    keys = list(api_keys) if api_keys is not None else _env_list("API_KEYS")
+    auth_disabled = not keys and (client is not None or _env_flag("API_AUTH_DISABLED"))
+    origins = list(cors_origins) if cors_origins is not None else _env_list("API_CORS_ORIGINS")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        if client is None:
+            # uvicorn only configures its own loggers; route the app's records to stderr too.
+            configure_logging()
+        if not keys and not auth_disabled:
+            raise RuntimeError("API_KEYS is not set; refusing to serve an unauthenticated API "
+                               "(set API_AUTH_DISABLED=true for local development only)")
+        if auth_disabled:
+            log.warning("API authentication is disabled")
         if client is not None:
             app.state.neo4j_client = client
             app.state.neo4j_config = config or _FAKE_TEST_CONFIG
@@ -121,6 +157,26 @@ def create_app(
             real_client.close()
 
     app = FastAPI(title=API_TITLE, version=API_VERSION, lifespan=lifespan)
+    if origins:
+        app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET"],
+                           allow_headers=["X-API-Key"])
+
+    @app.middleware("http")
+    async def access_log(request: Request, call_next):
+        started = time.perf_counter()
+        response = await call_next(request)
+        log.info("request", extra={"fields": {
+            "method": request.method, "path": request.url.path, "status": response.status_code,
+            "ms": round((time.perf_counter() - started) * 1000, 1)}})
+        return response
+
+    def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
+        if auth_disabled:
+            return
+        if not x_api_key or not any(secrets.compare_digest(x_api_key, key) for key in keys):
+            raise HTTPException(status_code=401, detail="Missing or invalid X-API-Key header")
+
+    protected = [Depends(require_api_key)]
 
     def get_client(request: Request) -> Neo4jClient:
         return request.app.state.neo4j_client
@@ -148,7 +204,7 @@ def create_app(
             return JSONResponse(status_code=503, content=model.model_dump())
         return model
 
-    @app.get("/events/{event_id}", response_model=EventModel)
+    @app.get("/events/{event_id}", response_model=EventModel, dependencies=protected)
     def get_event(
         event_id: str,
         neo4j_client: Neo4jClient = Depends(get_client),
@@ -158,7 +214,7 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"event not found: {event_id}")
         return event
 
-    @app.get("/events", response_model=list[EventModel])
+    @app.get("/events", response_model=list[EventModel], dependencies=protected)
     def list_events(
         start: dt.date = Query(..., description="Inclusive ISO start date"),
         end: dt.date = Query(..., description="Inclusive ISO end date"),
@@ -171,7 +227,7 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    @app.get("/chains/entity", response_model=ChainModel)
+    @app.get("/chains/entity", response_model=ChainModel, dependencies=protected)
     def entity_chain(
         name: str = Query(..., min_length=1),
         min_confidence: float = Query(0.0, ge=0.0, le=1.0),
@@ -186,7 +242,7 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    @app.get("/chains/topic", response_model=ChainModel)
+    @app.get("/chains/topic", response_model=ChainModel, dependencies=protected)
     def topic_chain(
         topic: str = Query(..., min_length=1),
         min_confidence: float = Query(0.0, ge=0.0, le=1.0),
@@ -201,7 +257,7 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    @app.get("/chains/date-range", response_model=ChainModel)
+    @app.get("/chains/date-range", response_model=ChainModel, dependencies=protected)
     def date_range_chain(
         start: dt.date = Query(..., description="Inclusive ISO start date"),
         end: dt.date = Query(..., description="Inclusive ISO end date"),

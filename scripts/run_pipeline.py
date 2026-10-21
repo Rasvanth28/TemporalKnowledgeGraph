@@ -28,7 +28,7 @@ def main():
     events = {e.event.id: e for r in output.results for e in r.events}
     print(f"articles: {len(output.results)}  events: {len(events)}  links: {len(output.links)}  (threshold {link_config.threshold})")
     print("event types:", dict(Counter(e.event.type for e in events.values())))
-    for link in sorted(output.links, key=lambda l: -l.confidence)[:10]:
+    for link in sorted(output.links, key=lambda link: -link.confidence)[:10]:
         a, b = events[link.from_event_id].event, events[link.to_event_id].event
         print(f"  {link.confidence:.2f} [{link.reason}]  {a.date} {a.description!r} -> {b.date} {b.description!r}")
     print(f"wrote {out_dir / 'pipeline_output.json'} and {out_dir / 'event_keys.csv'} ({n_keys} keys)")

@@ -59,7 +59,7 @@ def test_tfidf_scores_partial_topic_overlap():
 
 def test_link_events_points_earlier_to_later():
     links = link_events([result("art_b", RATE_2), result("art_a", RATE_1), result("art_c", OIL)])
-    assert [(l.from_event_id, l.to_event_id) for l in links] == [("r1", "r2")]
+    assert [(lk.from_event_id, lk.to_event_id) for lk in links] == [("r1", "r2")]
 
 def test_link_events_respects_threshold():
     assert link_events([result("a", RATE_1), result("b", RATE_2)], LinkConfig(threshold=0.99)) == []
@@ -73,7 +73,7 @@ def test_link_events_caps_outgoing_links_at_top_k():
              for i in range(5)]
     results = [result("first", RATE_1)] + [result(f"art{i}", e) for i, e in enumerate(later)]
     links = link_events(results, LinkConfig(top_k=2))
-    assert len([l for l in links if l.from_event_id == "r1"]) == 2
+    assert len([lk for lk in links if lk.from_event_id == "r1"]) == 2
 
 def test_inferred_dates_halve_the_date_score():
     a = ev("a", datetime.date(2026,3,1), "x", "general", [])
@@ -87,3 +87,15 @@ def test_date_proximity_alone_never_links():
     a = ev("a", datetime.date(2026,3,1), "Storm hit coast", "coast", [])
     b = ev("b", datetime.date(2026,3,1), "Markets rallied", "markets", [])
     assert link_events([result("x", a), result("y", b)], LinkConfig(date_weight=1, entity_weight=0, topic_weight=0)) == []
+
+def test_link_events_links_new_events_to_existing_ones_only():
+    rate_0 = ev("r0", datetime.date(2026,2,25), "The Federal Reserve raised interest rates", "interest rates", [FED])
+    existing = [("old_a", rate_0), ("old_b", RATE_1)]
+    links = link_events([result("new", RATE_2)], existing=existing)
+    pairs = {(lk.from_event_id, lk.to_event_id) for lk in links}
+    assert ("r0", "r2") in pairs and ("r1", "r2") in pairs
+    assert ("r0", "r1") not in pairs  # both already in the graph: linked by an earlier run
+
+def test_link_events_ignores_existing_copies_of_new_events():
+    links = link_events([result("a", RATE_1), result("b", RATE_2)], existing=[("a", RATE_1)])
+    assert [(lk.from_event_id, lk.to_event_id) for lk in links] == [("r1", "r2")]

@@ -80,4 +80,15 @@ def test_pipeline_on_sample_dataset_exports_sorted_keys(tmp_path):
     write_pipeline_json(output, tmp_path / "out.json")
     data = json.loads((tmp_path / "out.json").read_text())
     event_ids = {e["event"]["id"] for r in data["results"] for e in r["events"]}
-    assert all(l["from_event_id"] in event_ids and l["to_event_id"] in event_ids for l in data["links"])
+    assert all(lk["from_event_id"] in event_ids and lk["to_event_id"] in event_ids for lk in data["links"])
+
+def test_guardian_reports_rate_limit_after_retries():
+    session = FakeSession([FakeResponse({}, status_code=429)])
+    with pytest.raises(GuardianError, match="rate limit"):
+        GuardianSource("key", "q", session=session).load()
+
+def test_retrying_session_retries_rate_limits_not_auth_errors():
+    from pipeline.guardian import retrying_session
+    retry = retrying_session().get_adapter("https://content.guardianapis.com").max_retries
+    assert retry.total == 5 and 429 in retry.status_forcelist and 401 not in retry.status_forcelist
+    assert retry.respect_retry_after_header
