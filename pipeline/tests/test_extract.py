@@ -2,6 +2,8 @@ from pipeline.extract import (extract_entities,extract_event_description,extract
                               parse_date,classify_event_type,normalize_name,SpacyExtractor)
 from common.schema import Article
 import datetime
+import pytest
+from pipeline.extract import resolve_event_date
 
 
 def make_article(id="art_test", date=datetime.date(2026,1,1)):
@@ -33,7 +35,8 @@ def test_extract_event_description():
 
 def test_extract_event():
     text = "The Federal Reserve raised interest rates in March 2026"
-    event = extract_event(text,datetime.date(2026,1,1))
+    # Published after the event, as news is (a date months after the article is a forecast, not the event).
+    event = extract_event(text,datetime.date(2026,4,15))
     assert event.description == "Federal Reserve raised interest rates"
     assert event.date == datetime.date(2026,3,1)
     assert event.type == "policy_change"
@@ -155,3 +158,37 @@ def test_extract_topic_drops_possessive_markers():
     assert extract_topic("The Bank‘s monetary policy committee voted to cut rates in August 2024").name == "monetary policy committee"
     assert "’s" not in extract_topic("Last week’s budget has made life more complicated for the Bank of England.").name
     assert "'s" not in extract_topic("Last week's budget made life harder for the Bank of England.").name
+
+
+# ---- event dates: real sentences from the Guardian sample ----
+
+A = datetime.date
+
+
+@pytest.mark.parametrize("sentence, article_date, expected", [
+    # reference points are not when the event happened
+    ("The Bank of England has cut interest rates for the first time since the 2008 crisis.", A(2024, 8, 1), (A(2024, 8, 1), "inferred")),
+    ("Oil prices could rise above $100 a barrel, a level not seen since the summer of 2022.", A(2024, 4, 15), (A(2024, 4, 15), "inferred")),
+    ("Saudi Aramco was ordered to halt its expansion by 2027.", A(2024, 1, 30), (A(2024, 1, 30), "inferred")),
+    ("Opec agreed to extend the cut until the end of December 2025.", A(2024, 6, 2), (A(2024, 6, 2), "inferred")),
+    # forecasts and targets after the article are not reported events
+    ("Global food prices are set to fall a further 4% in 2025.", A(2024, 10, 29), (A(2024, 10, 29), "inferred")),
+    ("Economists said the Bank would cut rates in August.", A(2024, 6, 20), (A(2024, 6, 20), "inferred")),
+    # a bare month is its nearest occurrence: next February, i.e. the future -> not the event's date
+    ("A February rate cut still looks more likely than not to us.", A(2024, 12, 19), (A(2024, 12, 19), "inferred")),
+    # dates used as modifiers
+    ("Back when he called July's general election, the Bank of England was cautious.", A(2024, 8, 14), (A(2024, 8, 14), "inferred")),
+    # genuine past dates are kept
+    ("The Conservative administration introduced a temporary cut in fuel duty in 2022.", A(2024, 10, 29), (A(2022, 1, 1), "explicit")),
+    ("The former prime minister called the general election in May.", A(2024, 7, 8), (A(2024, 5, 1), "explicit")),
+    ("Food price inflation did not fall in July for the first time since March 2023.", A(2024, 8, 14), (A(2024, 7, 1), "explicit")),
+    # a past year that describes a noun is a reference, not the event's date
+    ("While battles on the scale of the Iraq war in 2003 would send prices higher, the increase would be limited.", A(2024, 10, 29), (A(2024, 10, 29), "inferred")),
+    # ...but a recent month on a noun ("the convention in July") is kept, and a year on the verb is kept
+    ("At the Republican national convention in July, Donald Trump pledged to cut gas prices.", A(2024, 11, 19), (A(2024, 7, 1), "explicit")),
+    ("The crown prince called for the expansion plan in 2020 as the oil market faltered.", A(2024, 1, 30), (A(2020, 1, 1), "explicit")),
+    # relative periods
+    ("Last month, the Bank cut interest rates for the first time since the pandemic.", A(2024, 9, 19), (A(2024, 8, 1), "explicit")),
+])
+def test_event_date_rules(sentence, article_date, expected):
+    assert resolve_event_date(sentence, article_date) == expected

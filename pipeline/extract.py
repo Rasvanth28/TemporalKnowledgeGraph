@@ -30,6 +30,8 @@ REPORTING_VERBS = {"say","tell","add","state","claim","report","note","insist","
                    "write","believe","think","suggest","reckon","acknowledge","admit"}
 COPULA_VERBS = {"be"}
 RELATIVE_DATES = {"today":0,"yesterday":-1,"tomorrow":1}
+YEAR_IN_TEXT = re.compile(r"\b(1[89]|20)\d{2}\b")
+MONTH_IN_TEXT = re.compile(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b", re.IGNORECASE)
 MONTH_OR_YEAR = re.compile(
     r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b|\b(1[89]|20)\d{2}\b",
     re.IGNORECASE,
@@ -136,6 +138,10 @@ def parse_date(text: str, article_date: datetime.date) -> datetime.date | None:
     if not 1800 <= start.year <= article_date.year + 10:
         return None
     has_month, has_day = start.month == probe.month, start.day == probe.day
+    if has_month and not YEAR_IN_TEXT.search(text):
+        # A bare month ("in May", "a February cut") means its nearest occurrence to the article date.
+        candidates = [start.replace(year=y) for y in (article_date.year - 1, article_date.year, article_date.year + 1)]
+        start = min(candidates, key=lambda d: abs((d - article_date).days))
     # "in March 2024" inside an article published 15 March 2024 means "now", not 1 March;
     # otherwise an under-specified date resolves to the start of its period.
     if not has_day and start.year == article_date.year and (not has_month or start.month == article_date.month):
@@ -143,23 +149,72 @@ def parse_date(text: str, article_date: datetime.date) -> datetime.date | None:
     return start
 
 
-def extract_event_date(text_or_span, article_date: datetime.date) -> list[datetime.date]:
-    span = _as_span(text_or_span)
-    dates = []
+def _previous_month(d: datetime.date) -> datetime.date:
+    return (d.replace(day=1) - datetime.timedelta(days=1)).replace(day=1)
+
+
+# Words that make a date a reference point rather than when the event happened:
+# "the first cut since 2008", "by 2027", "until the end of 2025", "from December 2021 to ...".
+REFERENCE_WORDS = {"since", "until", "till", "by", "before", "after", "from", "through", "than",
+                   "starting", "ending", "to", "between", "as"}
+RELATIVE_PERIODS = {
+    "last month": _previous_month,
+    "this month": lambda d: d,
+    "last week": lambda d: d - datetime.timedelta(days=7),
+    "this week": lambda d: d,
+}
+FUTURE_TOLERANCE = datetime.timedelta(days=7)  # "on Thursday" a few days ahead is still the news
+
+
+def event_dates(span: Doc | Span, article_date: datetime.date) -> list[datetime.date]:
+    """DATE mentions that say when *this* event happened, in sentence order.
+
+    Skipped: reference points (after REFERENCE_WORDS), dates used as modifiers ("the 2008 ...",
+    "July's election", "a February rate cut"), year-only mentions not introduced by "in"/"during",
+    and dates more than a week after the article (forecasts and targets, not reported events).
+    """
+
+    doc = span.doc if isinstance(span, Span) else span
+    found = []
     for ent in span.ents:
-        if ent.label_ == "DATE":
-            parsed = parse_date(ent.text, article_date)
-            if parsed is not None:
-                dates.append(parsed)
-    return dates or [article_date]
+        if ent.label_ != "DATE":
+            continue
+        text = ent.text.strip()
+        lower = text.lower()
+        before = doc[ent.start - 1].lower_ if ent.start > 0 else ""
+        after = doc[ent.end].text if ent.end < len(doc) else ""
+        if before in REFERENCE_WORDS or ent[0].lower_ in REFERENCE_WORDS:
+            continue
+        if after in {"'s", "’s"} or ent.root.dep_ in {"compound", "nmod", "amod", "poss", "nummod"}:
+            continue
+        if lower in RELATIVE_PERIODS:
+            date = RELATIVE_PERIODS[lower](article_date)
+        else:
+            date = parse_date(text, article_date)
+            if date is None:
+                continue
+            year_only = YEAR_IN_TEXT.search(text) and not MONTH_IN_TEXT.search(text)
+            if year_only and date.year != article_date.year:
+                if before not in {"in", "during"}:
+                    continue
+                # "the Iraq war in 2003": the year describes a noun, not when this event happened.
+                prep = ent.root.head
+                if prep.dep_ == "prep" and prep.head.pos_ in {"NOUN", "PROPN"}:
+                    continue
+        if date > article_date + FUTURE_TOLERANCE:
+            continue
+        found.append(date)
+    return found
+
+
+def extract_event_date(text_or_span, article_date: datetime.date) -> list[datetime.date]:
+    return event_dates(_as_span(text_or_span), article_date) or [article_date]
 
 
 def resolve_event_date(text_or_span, article_date: datetime.date) -> tuple[datetime.date, str]:
     # date_source tells linking whether the date came from the text or was inherited from the article.
-    span = _as_span(text_or_span)
-    has_explicit = any(e.label_ == "DATE" and parse_date(e.text, article_date) for e in span.ents)
-    date = pick_event_date(extract_event_date(span, article_date))
-    return date, "explicit" if has_explicit else "inferred"
+    dates = event_dates(_as_span(text_or_span), article_date)
+    return (pick_event_date(dates), "explicit") if dates else (article_date, "inferred")
 
 
 def pick_event_date(dates: list[datetime.date])->datetime.date:

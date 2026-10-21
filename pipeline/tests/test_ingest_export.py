@@ -92,3 +92,23 @@ def test_retrying_session_retries_rate_limits_not_auth_errors():
     retry = retrying_session().get_adapter("https://content.guardianapis.com").max_retries
     assert retry.total == 5 and 429 in retry.status_forcelist and 401 not in retry.status_forcelist
     assert retry.respect_retry_after_header
+
+
+def test_fetch_article_by_url():
+    from pipeline.guardian import fetch_article
+
+    class ItemSession:
+        def __init__(self, status=200):
+            self.status, self.urls = status, []
+
+        def get(self, url, params, timeout):
+            self.urls.append(url)
+            return FakeResponse({"response": {"status": "ok", "content": guardian_item(7)}}, status_code=self.status)
+
+    session = ItemSession()
+    raw = fetch_article("key", "https://www.theguardian.com/business/7", session=session)
+    assert session.urls == ["https://content.guardianapis.com/business/7"]
+    assert raw.article.title == "Headline 7"
+    assert fetch_article("key", "https://www.theguardian.com/business/7", session=ItemSession(404)) is None
+    with pytest.raises(GuardianError):
+        fetch_article("key", "https://example.com/not-guardian", session=session)
