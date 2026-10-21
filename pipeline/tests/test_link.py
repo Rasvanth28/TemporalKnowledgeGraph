@@ -99,3 +99,51 @@ def test_link_events_links_new_events_to_existing_ones_only():
 def test_link_events_ignores_existing_copies_of_new_events():
     links = link_events([result("a", RATE_1), result("b", RATE_2)], existing=[("a", RATE_1)])
     assert [(lk.from_event_id, lk.to_event_id) for lk in links] == [("r1", "r2")]
+
+
+def _all_pairs_reference(results, config=LinkConfig(), existing=()):
+    """The original quadratic algorithm, kept here to prove the fast path gives identical links."""
+    from pipeline.link import has_content_signal
+    new_items = [(r.article.id, e) for r in results for e in r.events]
+    new_ids = {e.event.id for _, e in new_items}
+    items = sorted(new_items + [(a, e) for a, e in existing if e.event.id not in new_ids],
+                   key=lambda item: (item[1].event.date, item[1].event.id))
+    scorer = TfidfTopicScorer()
+    scorer.fit([e for _, e in items])
+    links = []
+    for i, (art_a, a) in enumerate(items):
+        cands = []
+        for art_b, b in items[i + 1:]:
+            if (a.event.id not in new_ids and b.event.id not in new_ids) or (art_a == art_b and not config.link_within_article):
+                continue
+            link = compute_link(a, b, config, scorer)
+            if link.confidence >= config.threshold and has_content_signal(link):
+                cands.append(link)
+        links.extend(sorted(cands, key=lambda lk: (-lk.confidence, lk.to_event_id))[:config.top_k])
+    return links
+
+
+def test_fast_linking_matches_the_all_pairs_algorithm():
+    import random
+    rng = random.Random(7)
+    names = [Entity(id=f"e{i}", name=f"Name {i}", type="ORG") for i in range(12)]
+    words = "bank rates inflation oil opec saudi petrol prices cut hold vote election storm coast budget tax mortgage".split()
+    events = []
+    for i in range(80):
+        text = " ".join(rng.sample(words, 4))
+        events.append(ev(f"x{i:02d}", datetime.date(2024, 1, 1) + datetime.timedelta(days=rng.randrange(120)),
+                         text, rng.choice(words), rng.sample(names, rng.randrange(0, 3))))
+    results = [result(f"art{i // 3}", *events[i:i + 3]) for i in range(0, 60, 3)]
+    existing = [(f"old{i}", e) for i, e in enumerate(events[60:])]
+
+    def key(links):
+        return sorted((lk.from_event_id, lk.to_event_id, lk.confidence, lk.reason) for lk in links)
+
+    for config in (LinkConfig(), LinkConfig(top_k=2), LinkConfig(link_within_article=True, threshold=0.2)):
+        fast = link_events(results, config, existing=existing)
+        assert fast and key(fast) == key(_all_pairs_reference(results, config, existing))
+
+
+def test_link_events_tolerates_the_same_event_twice():
+    links = link_events([result("a", RATE_1), result("a", RATE_1), result("b", RATE_2)])
+    assert [(lk.from_event_id, lk.to_event_id) for lk in links] == [("r1", "r2")]

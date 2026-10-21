@@ -116,30 +116,71 @@ def compute_link(a: ExtractedEvent, b: ExtractedEvent, config: LinkConfig = Link
     )
 
 
+def _candidate_pairs(items: list[tuple[str, ExtractedEvent]], new_positions: list[int],
+                     scorer: TopicScorer) -> set[tuple[int, int]] | None:
+    """Pairs (i < j) that can possibly link, or None to fall back to comparing every pair.
+
+    A link needs a content signal (has_content_signal): a shared entity or topic similarity >=
+    TOPIC_SIGNAL. So only pairs with one of those are scored, which gives exactly the same links as
+    comparing everything, without the quadratic cost. Needs the TF-IDF matrix to find topic pairs.
+    """
+
+    if not isinstance(scorer, TfidfTopicScorer) or scorer.matrix is None:
+        return None
+    pairs: set[tuple[int, int]] = set()
+    by_entity: dict[str, list[int]] = {}
+    for pos, (_, e) in enumerate(items):
+        for entity in e.entities:
+            by_entity.setdefault(entity.id, []).append(pos)
+    for i in new_positions:
+        for entity in items[i][1].entities:
+            for j in by_entity.get(entity.id, ()):
+                if j != i:
+                    pairs.add((min(i, j), max(i, j)))
+    # Topic similarity for all new x all events in one sparse product (rows are L2-normalised).
+    rows = [scorer.index[items[i][1].event.id] for i in new_positions]
+    row_to_pos = {scorer.index[e.event.id]: pos for pos, (_, e) in enumerate(items)}
+    sims = (scorer.matrix[rows] @ scorer.matrix.T).tocoo()
+    for r, c, value in zip(sims.row, sims.col, sims.data):
+        if value >= TOPIC_SIGNAL:
+            i, j = new_positions[r], row_to_pos[c]
+            if i != j:
+                pairs.add((min(i, j), max(i, j)))
+    return pairs
+
+
 def link_events(results: list[ExtractionResult], config: LinkConfig = LinkConfig(), scorer: TopicScorer | None = None,
                 existing: list[tuple[str, ExtractedEvent]] = ()) -> list[EventLink]:
     # Links always point earlier -> later (ties broken by id), so they can become PRECEDES edges.
     # existing: (article_id, event) already in the graph. They are scored against the new events
     # but never against each other, because an earlier run already linked those pairs.
-    # O(n^2) over events: fine for thousands of events; callers bound `existing` by a date window.
     new_items = [(r.article.id, e) for r in results for e in r.events]
     new_ids = {e.event.id for _, e in new_items}
-    items = new_items + [(a, e) for a, e in existing if e.event.id not in new_ids]
-    items.sort(key=lambda item: (item[1].event.date, item[1].event.id))
+    # One item per event id (the same article can arrive twice, e.g. when paging shifts mid-fetch).
+    unique: dict[str, tuple[str, ExtractedEvent]] = {}
+    for article_id, e in new_items + [(a, e) for a, e in existing if e.event.id not in new_ids]:
+        unique.setdefault(e.event.id, (article_id, e))
+    items = sorted(unique.values(), key=lambda item: (item[1].event.date, item[1].event.id))
     scorer = scorer or TfidfTopicScorer()
     scorer.fit([e for _, e in items])
 
+    new_positions = [pos for pos, (_, e) in enumerate(items) if e.event.id in new_ids]
+    candidates = _candidate_pairs(items, new_positions, scorer)
+    if candidates is None:  # custom scorer: compare every relevant pair
+        candidates = {(i, j) for i in range(len(items)) for j in range(i + 1, len(items))}
+    outgoing: dict[int, list[EventLink]] = {}
+    for i, j in candidates:
+        (article_a, a), (article_b, b) = items[i], items[j]
+        if a.event.id not in new_ids and b.event.id not in new_ids:
+            continue
+        if article_a == article_b and not config.link_within_article:
+            continue
+        link = compute_link(a, b, config, scorer)
+        if link.confidence >= config.threshold and has_content_signal(link):
+            outgoing.setdefault(i, []).append(link)
+
     links = []
-    for i, (article_a, a) in enumerate(items):
-        candidates = []
-        for article_b, b in items[i+1:]:
-            if a.event.id not in new_ids and b.event.id not in new_ids:
-                continue
-            if article_a == article_b and not config.link_within_article:
-                continue
-            link = compute_link(a, b, config, scorer)
-            if link.confidence >= config.threshold and has_content_signal(link):
-                candidates.append(link)
-        candidates.sort(key=lambda link: (-link.confidence, link.to_event_id))
-        links.extend(candidates[:config.top_k])
+    for i in sorted(outgoing):
+        ranked = sorted(outgoing[i], key=lambda link: (-link.confidence, link.to_event_id))
+        links.extend(ranked[:config.top_k])
     return links

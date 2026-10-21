@@ -41,3 +41,18 @@ def test_extracted_from_graph_round_trips_event_fields():
     assert article_id == "a1"
     assert extracted.event.date == datetime.date(2024, 3, 1) and extracted.event.date_source == "inferred"
     assert extracted.entities[0].name == "X" and extracted.topic.name == "t" and extracted.source_text == "s"
+
+
+def test_load_ingest_config_everything_wikipedia_retention(tmp_path):
+    path = tmp_path / "q.json"
+    path.write_text(json.dumps({"queries": [{"query": ""}], "wikipedia_current_events": True, "retention_days": 30,
+                                "graph_limits": {"max_nodes": 1000, "max_relationships": 2000}}))
+    config = load_ingest_config(path)
+    assert config.queries == (IngestQuery(""),) and config.wikipedia and config.retention_days == 30
+    assert (config.max_nodes, config.max_relationships) == (1000, 2000)
+
+
+def test_wikipedia_alone_is_a_valid_config(tmp_path):
+    path = tmp_path / "q.json"
+    path.write_text(json.dumps({"wikipedia_current_events": True}))
+    assert load_ingest_config(path).queries == ()
