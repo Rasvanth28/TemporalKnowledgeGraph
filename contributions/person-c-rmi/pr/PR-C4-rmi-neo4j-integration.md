@@ -1,8 +1,8 @@
-# PR C4 — Live RMI vs Neo4j B+ tree integration (BLOCKED)
+# PR C4 — Live RMI vs Neo4j B+ tree integration
 
-- **Status:** **Draft — do not open until dependencies merge.**
+- **Status:** Implemented on `feature/rmi-neo4j-integration` (2026-10-21); results in root `RESULTS.md`.
 - **Base branch:** updated `main`
-- **Head branch:** `feature/rmi-neo4j-integration` (not created yet)
+- **Head branch:** `feature/rmi-neo4j-integration`
 - **PR scope:** C4
 - **Suggested title:** `feat: benchmark RMI against Neo4j fallback`
 
@@ -29,10 +29,10 @@ Do not branch from a Person B `feature/graphdb-*` branch. Branch from updated `m
 5. Finalize `contributions/person-c-rmi/RESULTS.md` and propose root `RESULTS.md`.
 6. Record exact commands and observed results in `TESTING.md`.
 
-## Current blockers
+## Outcome
 
-- Person B PRs #8–#12 are open but not merged.
-- No Aura `.env` exists on the development machine.
-- No real exported event-key CSV is available yet.
-
-Until those are resolved, this PR cannot be opened or implemented honestly.
+- Dependencies resolved: Person B's work is on `main` and the Aura `.env` exists.
+- The fallback adapter is `rmi.live.neo4j_lower_bound`, injected into `DateIndex` (the plan said `rmi/fallback.py`; it sits
+  next to the live code instead, so `rmi/fallback.py` stays free of Neo4j imports).
+- The benchmark uses the id-only form of `graphdb.queries`' date-range query, so it measures the index, not the
+  entity/topic fan-out.

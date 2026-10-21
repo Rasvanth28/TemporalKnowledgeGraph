@@ -1,8 +1,10 @@
 # Session handoff — Research/RMI lane
 
-- **Last updated:** 2026-10-19
-- **Branch:** `feature/rmi-drift`
-- **Stage:** C1 PR #13, C2 PR #14, and C3 PR #15 are open. C4 is blocked.
+- **Last updated:** 2026-10-21
+- **Branch:** `feature/rmi-neo4j-integration`
+- **Stage:** C1–C3 merged. C4 implemented (live benchmark, drift on real data, `RESULTS.md`); PR open for review.
+
+> The notes below the first section describe the 2026-10-19 state and are kept for history.
 
 ## Current status
 

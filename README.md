@@ -123,6 +123,17 @@ scored (name index + one sparse TF-IDF product); this gives exactly the links of
 
 **Limits to know:** Render Free sleeps after 15 min idle (first request about 30s); GitHub disables scheduled workflows after 60 days without repository activity; Aura Free caps the graph size (200k nodes / 400k relationships at the time of writing).
 
+## Research: learned index (Person C lane)
+
+`rmi/` is a two-stage Recursive Model Index over event dates, benchmarked against Neo4j's B+ tree on the live graph.
+It is correct but does not beat the database's own index for this workload, so the app does not use it; see
+[`RESULTS.md`](RESULTS.md).
+
+```bash
+python -m rmi.live --queries 300 --out rmi_live.json   # read-only: export keys, benchmark, drift
+python -m rmi.benchmark --distribution clustered        # synthetic, no database
+```
+
 ## ML/NLP pipeline (Person A lane)
 
 ### Running it

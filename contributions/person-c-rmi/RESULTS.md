@@ -1,7 +1,7 @@
 # RMI results
 
-> **Status: draft.** Synthetic results are added in C2/C3. Live RMI-vs-B+tree results require C4, which is
-> blocked until Person B's PRs #8–#12 merge and a Neo4j `.env` exists.
+> **Status: final.** The live C4 results, and C2 rerun after the stage-1 routing fix, are in the root
+> [`RESULTS.md`](../../RESULTS.md). This file keeps the original synthetic C1–C3 runs.
 
 ## 1. Setup
 
@@ -68,11 +68,7 @@ Interpretation:
 
 ## 5. C4 live RMI vs Neo4j B+ tree
 
-Blocked. Requires:
-
-- Person B PRs #8–#12 merged;
-- `graphdb/queries.py` on `main`;
-- a reachable Neo4j `.env`;
-- the exported real event-key dataset.
-
-Until then, any statement about RMI beating or losing to the B+ tree is unproven.
+Done on 2026-10-21 against the production graph (26,421 events on 561 days): see the root
+[`RESULTS.md`](../../RESULTS.md). In short, the RMI was correct on 300 out of 300 queries with zero fallbacks, but slower
+than `bisect` in process and irrelevant next to Neo4j's 4 ms server / ~125 ms round trip; putting it in front of
+Neo4j doubles server time; and daily inserts make its answers silently incomplete until it is rebuilt (7 ms).

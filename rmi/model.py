@@ -160,6 +160,31 @@ class RMIModel:
         if not self._fitted:
             raise RuntimeError("RMIModel must be fitted before lookup")
 
+    def _route(self, key: int) -> int:
+        """Stage 1, corrected: the bucket whose key range holds ``key``.
+
+        The prediction is off by at most ``stage1_error_buckets``; comparing the
+        key with bucket boundaries walks to the right bucket in that many steps,
+        so only one stage-2 model runs.
+        """
+
+        predicted_norm = min(max(self.stage1.predict_scalar(key), 0.0), 1.0)
+        bucket = int(min(max(int(predicted_norm * self.bucket_count), 0), self.bucket_count - 1))
+        while bucket > 0 and key < int(self.keys[self.bucket_starts[bucket]]):
+            bucket -= 1
+        while bucket < self.bucket_count - 1 and key >= int(self.keys[self.bucket_starts[bucket + 1]]):
+            bucket += 1
+        return bucket
+
+    def _window(self, bucket: int, key: int, slack: int = 0) -> tuple[int, int]:
+        """Stage 2: inclusive positions in ``bucket`` that must hold ``key`` if present."""
+
+        start = int(self.bucket_starts[bucket])
+        end = int(self.bucket_ends[bucket])
+        global_prediction = int(round(start + self.stage2_models[bucket].predict_scalar(key)))
+        window = int(self.stage2_errors[bucket]) + slack
+        return max(start, global_prediction - window), min(end - 1, global_prediction + window)
+
     def lookup(self, key: int) -> LookupResult:
         self._require_fitted()
         key = int(key)
@@ -173,34 +198,18 @@ class RMIModel:
                 reason="out_of_range",
             )
 
-        predicted_norm = min(max(self.stage1.predict_scalar(key), 0.0), 1.0)
-        predicted_bucket = int(
-            min(max(int(predicted_norm * self.bucket_count), 0), self.bucket_count - 1)
-        )
-        first_bucket = max(0, predicted_bucket - self.stage1_error_buckets)
-        last_bucket = min(
-            self.bucket_count - 1, predicted_bucket + self.stage1_error_buckets
-        )
-
         checked = 0
-        for bucket in range(first_bucket, last_bucket + 1):
-            start = int(self.bucket_starts[bucket])
-            end = int(self.bucket_ends[bucket])
-            local_prediction = self.stage2_models[bucket].predict_scalar(key)
-            global_prediction = int(round(start + local_prediction))
-            window = int(self.stage2_errors[bucket])
-            search_start = max(start, global_prediction - window)
-            search_end = min(end - 1, global_prediction + window)
-            for position in range(search_start, search_end + 1):
-                checked += 1
-                if int(self.keys[position]) == key:
-                    return LookupResult(
-                        found=True,
-                        index=position,
-                        candidates_checked=checked,
-                        used_fallback=False,
-                        reason=None,
-                    )
+        search_start, search_end = self._window(self._route(key), key)
+        for position in range(search_start, search_end + 1):
+            checked += 1
+            if int(self.keys[position]) == key:
+                return LookupResult(
+                    found=True,
+                    index=position,
+                    candidates_checked=checked,
+                    used_fallback=False,
+                    reason=None,
+                )
 
         return LookupResult(
             found=False,
@@ -208,6 +217,48 @@ class RMIModel:
             candidates_checked=checked,
             used_fallback=True,
             reason="not_found",
+        )
+
+    def lower_bound(self, key: int) -> LookupResult:
+        """Position of the first key >= ``key`` (``n`` when every key is smaller).
+
+        Range queries start and end on keys the model never saw (days without
+        events). Both stage models are non-decreasing, so an unseen key between
+        training keys k_i < key < k_i+1 is predicted between their predictions and
+        lands at most one position further from its answer (i + 1) than the
+        training error: the window is widened by one. Each candidate is still
+        verified against its left neighbour, and a miss reports ``used_fallback``.
+        """
+
+        self._require_fitted()
+        key = int(key)
+        if key <= self.min_key:
+            return LookupResult(found=True, index=0, candidates_checked=0, used_fallback=False)
+        if key > self.max_key:
+            return LookupResult(found=True, index=self.n, candidates_checked=0, used_fallback=False)
+
+        bucket = self._route(key)
+        end = int(self.bucket_ends[bucket])
+        if key > int(self.keys[end - 1]):  # in the gap before the next bucket
+            return LookupResult(found=True, index=end, candidates_checked=1, used_fallback=False)
+        checked = 0
+        search_start, search_end = self._window(bucket, key, slack=1)
+        for position in range(search_start, search_end + 1):
+            checked += 1
+            if int(self.keys[position]) >= key and int(self.keys[position - 1]) < key:
+                return LookupResult(
+                    found=True,
+                    index=position,
+                    candidates_checked=checked,
+                    used_fallback=False,
+                )
+
+        return LookupResult(
+            found=False,
+            index=None,
+            candidates_checked=checked,
+            used_fallback=True,
+            reason="boundary_outside_window",
         )
 
     def lookup_many(self, keys: np.ndarray) -> list[LookupResult]:
