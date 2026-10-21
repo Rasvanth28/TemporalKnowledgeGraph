@@ -22,7 +22,7 @@ GitHub Actions (daily 06:17 UTC)                       Render (Docker web servic
 | Piece | Where | Config |
 |---|---|---|
 | CI: ruff, all tests incl. live Neo4j integration (service container), Docker build + fail-closed check | `.github/workflows/ci.yml`, every PR and push to `main` | none |
-| Ingestion: incremental, idempotent, one run at a time | `.github/workflows/ingest.yml` (daily + manual "Run workflow", optional dry run) | repo secrets `GUARDIAN_API_KEY`, `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`; queries in `config/ingest_queries.json` |
+| Ingestion: incremental, idempotent, one run at a time | `.github/workflows/ingest.yml` (daily + manual "Run workflow", optional dry run) | repo secrets `GUARDIAN_API_KEY`, `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`; queries in `config/ingest_queries.json` |
 | Read API | `Dockerfile` + `render.yaml`, auto-deploys from `main` after CI passes | Render env: `NEO4J_*`, `API_KEYS` (generated), `API_CORS_ORIGINS` |
 | Tests' database | local: `docker compose --profile test up -d neo4j-test`; CI: service container | `NEO4J_TEST_*` (never the real database) |
 
@@ -40,8 +40,8 @@ link and the events it led to / follows from, with the reason in plain words. Se
 
 ### First deployment
 
-1. **GitHub secrets:** repo → Settings → Secrets and variables → Actions → add `GUARDIAN_API_KEY`, `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` (the Aura values).
-2. **Render:** dashboard → New → Blueprint → select this repo → fill `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` (and `API_CORS_ORIGINS` if a browser app will call the API). Copy the generated `API_KEYS` value for clients.
+1. **GitHub secrets:** repo → Settings → Secrets and variables → Actions → add `GUARDIAN_API_KEY`, `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE` (the Aura values; Aura's database name is the instance id from its credentials file, **not** `neo4j`).
+2. **Render:** dashboard → New → Blueprint → select this repo → fill `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE` (and `API_CORS_ORIGINS` if a browser app will call the API). Copy the generated `API_KEYS` value for clients.
 3. **Check:** `curl https://<service>.onrender.com/health`, then `curl -H "X-API-Key: <key>" "https://<service>.onrender.com/events?start=2024-01-01&end=2024-12-31"`.
 4. **First ingestion:** Actions → Ingest → Run workflow (tick *dry run* first to see the summary without writing).
 
@@ -53,7 +53,7 @@ link and the events it led to / follows from, with the reason in plain words. Se
 | Log shows `guardian results capped` | A query had more results than `max_per_query`. Results are fetched oldest-first, so the next run continues; raise `max_per_query` to catch up faster. |
 | Rotate an API key | Render env `API_KEYS=new,old` → deploy → move clients to `new` → remove `old`. |
 | Rotate Neo4j password | Change it in Aura, then update Render env and the GitHub secret `NEO4J_PASSWORD`. |
-| API returns 503 on `/health` | Neo4j unreachable: check the Aura console. Aura Free pauses idle instances; the daily ingestion keeps it active. |
+| API returns 503 on `/health` / Render deploy never finishes | Read the `error` in the `/health` body. `DatabaseNotFound` means `NEO4J_DATABASE` is wrong (Aura uses the instance id). Otherwise Neo4j is unreachable: check the Aura console. Aura Free pauses idle instances; the daily ingestion keeps it active. |
 | Add a news topic | Add a query to `config/ingest_queries.json` via PR. New queries start from the newest article already in the graph. |
 
 **Limits to know:** Render Free sleeps after 15 min idle (first request about 30s); GitHub disables scheduled workflows after 60 days without repository activity; Aura Free caps the graph size (200k nodes / 400k relationships at the time of writing).

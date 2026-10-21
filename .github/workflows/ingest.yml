@@ -1,7 +1,8 @@
 name: Ingest
 
 # Daily incremental ingestion into the production graph (Neo4j Aura).
-# Required repository secrets: GUARDIAN_API_KEY, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD.
+# Required repository secrets: GUARDIAN_API_KEY, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, NEO4J_DATABASE
+# (Aura names the database after the instance id; see NEO4J_DATABASE in the Aura credentials file).
 on:
   schedule:
     - cron: "17 6 * * *"   # 06:17 UTC daily (off the hour to avoid GitHub's top-of-hour queue)
@@ -35,7 +36,7 @@ jobs:
       NEO4J_URI: ${{ secrets.NEO4J_URI }}
       NEO4J_USER: ${{ secrets.NEO4J_USER }}
       NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
-      NEO4J_DATABASE: neo4j
+      NEO4J_DATABASE: ${{ secrets.NEO4J_DATABASE }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
