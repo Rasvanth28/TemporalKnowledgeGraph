@@ -199,7 +199,12 @@ def extract_event_description(text_or_span):
 
 
 def _chunk_topic(chunk) -> str:
-    words = [t.text for t in chunk if t.dep_ not in {"det","poss"} and t.pos_ != "PRON"]
+    # Drop determiners, possessors and the possessive marker itself ("the Bank's committee" -> "committee";
+    # news text often uses a curly apostrophe, so "’s" must go too).
+    # A token that still ends in a possessive ("Bank‘s", parsed as one token) is a possessor too.
+    words = [t.text for t in chunk
+             if t.dep_ not in {"det", "poss", "case"} and t.pos_ not in {"PRON", "PART", "PUNCT"}
+             and not re.search(r"['’‘]s$", t.text)]
     return " ".join(words).lower().strip()
 
 

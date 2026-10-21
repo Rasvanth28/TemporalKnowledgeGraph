@@ -87,3 +87,15 @@ def test_search_still_works_before_search_indexes_exist():
             neo4j.run(f"DROP INDEX {name} IF EXISTS")
         found = search_graph(neo4j, "Bank of England interest rates", get_embedder())
         assert "Bank of England" in labels(found, "entity")
+
+
+def test_results_explain_why_and_cite_sources(client):
+    result = search_graph(client, "Bank of England interest rates in 2024", get_embedder())
+    events = [n for n in result["nodes"] if n["kind"] == "event"]
+    assert events and all(e["evidence"] for e in events)
+    boe = [e for e in events if "Bank of England" in e["why"]["names"]]
+    assert boe and all(e["why"]["in_date_range"] for e in events)
+    assert any("rates" in e["why"]["keywords"] for e in boe)
+    cited = {e["article_id"] for e in events}
+    assert {s["id"] for s in result["sources"]} == cited
+    assert all(s["url"].startswith("https://") and s["title"] for s in result["sources"])

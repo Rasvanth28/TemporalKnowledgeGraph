@@ -44,7 +44,17 @@ The panel also lists the graph's events in date order. Search URLs are shareable
    return an empty graph instead of the nearest noise (thresholds calibrated in `graphdb/search.py`).
 
 The results are merged with reciprocal-rank fusion and filtered by the date range. The UI shows what was understood
-(names, dates, keywords) so results are explainable. Ingestion maintains the indexes and embeds new events
+(names, dates, keywords) so results are explainable.
+
+**Explanations and sources.** Every result explains itself and cites its source articles as numbered references [1], [2]…
+with headline, publisher, date and link:
+- *The story*: event count and span, the most connected names, and the strongest thread of linked events, each step with its reason.
+- *Relationship panel* (click or hover any line): for event→event links, both source sentences quoted, the shared names and topic,
+  the days apart, the link strength (names 50%, subject 30%, timing 20%), and a note that a link means "part of the same story",
+  not proof of cause. For event→person/topic lines, the sentence that names them.
+- *Event panel*: why it is in the results (asked-about name, matched keywords, similar meaning, date range) and the evidence quote.
+
+Quotes are single sentences (max 280 characters) shown with attribution and a link to the original. Ingestion maintains the indexes and embeds new events
 (`python -m graphdb.search_index` does the same by hand).
 
 - Same origin as the API, so no CORS setup is needed. The graph library (force-graph, MIT) is vendored in `graphdb/static/vendor/`.
