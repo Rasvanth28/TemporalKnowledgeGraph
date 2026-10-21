@@ -13,6 +13,7 @@ index, with a guaranteed-correct fallback to Neo4j.
 python -m pytest rmi/tests -q
 python -m rmi.train --keys 10000 --distribution uniform --seed 42
 python -m rmi.benchmark --keys 10000 --queries 2000 --distribution uniform --seed 42 --repeats 3
+python -m rmi.drift --initial-keys 5000 --new-keys 500 --queries 500 --seed 42 --repeats 3
 ```
 
 Configuration:
@@ -29,6 +30,7 @@ RMI_BUCKET_COUNT=128
 - Synthetic uniform and clustered sorted-key generators.
 - Injected-fallback benchmark harness with same-query-set correctness and latency results.
 - Idempotent `retrain_rmi()` entry point.
+- Synthetic update-drift experiment: one retrain recovers all out-of-range queries.
 
 ### Blocked until Person B merges
 

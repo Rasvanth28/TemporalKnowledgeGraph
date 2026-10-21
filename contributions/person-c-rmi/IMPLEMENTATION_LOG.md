@@ -120,3 +120,61 @@ The result is recorded honestly in [RESULTS.md](RESULTS.md).
 - [PR-C2](pr/PR-C2-rmi-benchmark.md)
 
 **Next:** C3 update-drift experiment, idempotent retraining metrics, and `RESULTS.md` update.
+
+## 2026-10-19 — C3: update-drift experiment
+
+**Objective:** Measure lookup accuracy and latency before and after a single manually triggered retrain
+when new keys arrive outside the trained range.
+
+**Branch:** `feature/rmi-drift`, stacked on `feature/rmi-benchmark` because PR C2 is not merged yet.
+
+**Files created:**
+
+- `rmi/drift.py`
+- `rmi/tests/test_drift.py`
+- `contributions/person-c-rmi/pr/PR-C3-rmi-drift.md`
+
+**Files modified:**
+
+- `contributions/person-c-rmi/README.md`
+- `contributions/person-c-rmi/ARCHITECTURE.md`
+- `contributions/person-c-rmi/IMPLEMENTATION_LOG.md`
+- `contributions/person-c-rmi/TESTING.md`
+- `contributions/person-c-rmi/REVIEW_GUIDE.md`
+- `contributions/person-c-rmi/RESULTS.md`
+- `contributions/person-c-rmi/SESSION_HANDOFF.md`
+- `contributions/person-c-rmi/PROPOSED_ROOT_README_SECTION.md`
+
+**Reasoning:** The experiment shifts new keys above the initial maximum, so every query is out of range
+before retraining. It measures the same query set before and after `retrain_rmi()`. This directly answers
+the design document's update-drift question without Neo4j. The retrain function is the existing idempotent
+`retrain_rmi` from C1.
+
+**Alternatives considered:**
+
+- Retrain on every insert: rejected; expensive and out of MVP scope.
+- Wait for live Neo4j: rejected; the drift question can be answered synthetically now.
+- Incremental model updates: deferred to backlog.
+
+**Checks run and results:**
+
+- `python -m compileall -q rmi` — exit 0. [VERIFIED]
+- `pytest rmi/tests -q` — 39 passed. [VERIFIED]
+- Uniform drift, initial=5,000, new=500, queries=500, repeats=3:
+  before correct 0 / fallbacks 500; after correct 500 / fallbacks 0; retrain 3.8 ms. [VERIFIED]
+- Clustered drift, same size:
+  before correct 0 / fallbacks 500; after correct 500 / fallbacks 0; retrain 4.9 ms. [VERIFIED]
+
+**Results and failures:** One retrain recovered every out-of-range query in the synthetic experiment.
+Clustered keys remain slower to answer after retraining, which is a real limitation of the current model,
+not a correctness failure.
+
+**Links:**
+
+- [ADR-0003](decisions/ADR-0003-retrain-drift-experiment.md)
+- [TESTING.md](TESTING.md)
+- [RESULTS.md](RESULTS.md)
+- [PR-C3](pr/PR-C3-rmi-drift.md)
+
+**Next:** C4 is blocked until Person B PRs #8–#12 merge and Aura `.env` exists. After that: wire the real
+`graphdb.queries` fallback, run the live RMI-vs-B+tree benchmark, and finalize `RESULTS.md`.

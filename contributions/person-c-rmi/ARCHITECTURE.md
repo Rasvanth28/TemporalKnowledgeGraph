@@ -31,7 +31,7 @@ flowchart LR
 | `rmi/train.py` | **C1 complete** | `train_rmi`, idempotent `retrain_rmi`, CLI summary |
 | `rmi/fallback.py` | **C2 complete** | Injected fallback contract; binary-search stand-in |
 | `rmi/benchmark.py` | **C2 complete** | Same-query-set RMI vs injected fallback benchmark |
-| `rmi/drift.py` | **C3 planned** | New-key drift experiment before/after retraining |
+| `rmi/drift.py` | **C3 complete** | New-key drift experiment before/after retraining |
 | `rmi/fallback.py` Neo4j adapter | **C4 blocked** | Thin adapter around `graphdb.queries` |
 
 ## 3. RMI algorithm
