@@ -22,6 +22,8 @@ from typing import Any, Literal
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from pydantic import BaseModel, Field
 
 from common.log import configure_logging
@@ -35,7 +37,11 @@ from graphdb.queries import (
     chain_by_topic,
     event_by_id,
     events_in_date_range,
+    articles_by_ids,
+    top_entities,
 )
+
+STATIC_DIR = Path(__file__).parent / "static"
 
 API_TITLE = "Temporal Knowledge Graph API"
 API_VERSION = "0.2.0"
@@ -87,6 +93,18 @@ class ChainModel(BaseModel):
     events: list[EventModel] = Field(default_factory=list)
     links: list[LinkModel] = Field(default_factory=list)
     truncated: bool = False
+
+
+class ArticleModel(BaseModel):
+    id: str
+    title: str | None = None
+    url: str | None = None
+    source: str | None = None
+    date: str | None = None
+
+
+class TopEntityModel(EntityModel):
+    events: int
 
 
 class Neo4jHealthModel(BaseModel):
@@ -277,6 +295,27 @@ def create_app(
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/articles", response_model=list[ArticleModel], dependencies=protected)
+    def articles(
+        ids: str = Query(..., description="Comma-separated article ids (max 200)"),
+        neo4j_client: Neo4jClient = Depends(get_client),
+    ):
+        try:
+            return articles_by_ids(neo4j_client, [i.strip() for i in ids.split(",") if i.strip()])
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.get("/entities/top", response_model=list[TopEntityModel], dependencies=protected)
+    def entities_top(
+        limit: int = Query(20, ge=1, le=100),
+        neo4j_client: Neo4jClient = Depends(get_client),
+    ):
+        return top_entities(neo4j_client, limit=limit)
+
+    # The browser UI. Mounted last so every API route above takes precedence.
+    if STATIC_DIR.is_dir():
+        app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="ui")
 
     return app
 

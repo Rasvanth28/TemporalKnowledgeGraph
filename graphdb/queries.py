@@ -538,3 +538,41 @@ def latest_article_date(client: Neo4jClient) -> dt.date | None:
     rows = client.run(_LATEST_ARTICLE_DATE)
     latest = _iso_date(rows[0]["latest"]) if rows else None
     return dt.date.fromisoformat(latest) if latest else None
+
+
+_ARTICLES_BY_IDS = """
+UNWIND $ids AS id
+MATCH (a:Article {id: id})
+RETURN a.id AS id, a.title AS title, a.url AS url, a.source AS source, a.date AS date
+ORDER BY a.date, a.id
+"""
+
+_TOP_ENTITIES = """
+MATCH (n:Entity)<-[:INVOLVES]-(e:Event)
+WITH n, count(DISTINCT e) AS events
+WHERE events >= $min_events
+RETURN n.id AS id, n.name AS name, n.type AS type, events
+ORDER BY events DESC, n.name
+LIMIT $limit
+"""
+
+MAX_ARTICLE_IDS = 200
+
+
+def articles_by_ids(client: Neo4jClient, ids: list[str]) -> list[dict[str, Any]]:
+    """Headline, link and date for the given article ids (unknown ids are omitted)."""
+
+    unique = sorted({str(i) for i in ids if i})
+    if len(unique) > MAX_ARTICLE_IDS:
+        raise ValueError(f"at most {MAX_ARTICLE_IDS} article ids per request")
+    if not unique:
+        return []
+    rows = client.run(_ARTICLES_BY_IDS, {"ids": unique})
+    return [{**row, "date": _iso_date(row.get("date"))} for row in rows]
+
+
+def top_entities(client: Neo4jClient, limit: int = 20, min_events: int = 2) -> list[dict[str, Any]]:
+    """The entities involved in the most events: starting points for exploring the graph."""
+
+    rows = client.run(_TOP_ENTITIES, {"limit": _coerce_limit(limit), "min_events": int(min_events)})
+    return [{**_entity_row(row), "events": int(row["events"])} for row in rows]

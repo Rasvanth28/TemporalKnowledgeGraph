@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Storyline · Temporal Knowledge Graph</title>
+  <meta name="description" content="Follow how a news story unfolds over time.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='8' cy='16' r='5' fill='%232563eb'/><circle cx='24' cy='8' r='4' fill='%232563eb'/><circle cx='24' cy='24' r='4' fill='%232563eb'/><path d='M12 14 21 9M12 18l9 5' stroke='%232563eb' stroke-width='2'/></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Storyline home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="8" cy="16" r="5"/><circle cx="24" cy="8" r="4"/><circle cx="24" cy="24" r="4"/><path d="M12 14 21 9M12 18l9 5"/></svg>
+      Storyline
+    </a>
+    <button id="key-button" class="ghost" type="button">API key</button>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Follow a story through time</h1>
+      <p class="lede">News doesn't happen in isolation. Pick a person, organisation or topic to see what happened, in order, and which events led to which.</p>
+
+      <form id="search" class="search" autocomplete="off">
+        <div class="modes" role="radiogroup" aria-label="Search by">
+          <label><input type="radio" name="mode" value="entity" checked> Who / what</label>
+          <label><input type="radio" name="mode" value="topic"> Topic</label>
+          <label><input type="radio" name="mode" value="dates"> Dates</label>
+        </div>
+        <div class="search-row" id="text-row">
+          <input id="query" name="query" type="search" placeholder="e.g. Bank of England" aria-label="Search" required>
+          <button type="submit">Show story</button>
+        </div>
+        <div class="search-row hidden" id="date-row">
+          <label>From <input id="start" type="date"></label>
+          <label>To <input id="end" type="date"></label>
+          <button type="submit">Show story</button>
+        </div>
+      </form>
+
+      <div id="suggestions" class="suggestions" aria-live="polite"></div>
+    </section>
+
+    <section id="status" class="status hidden" role="status"></section>
+
+    <section id="results" class="hidden">
+      <div class="results-head">
+        <div>
+          <h2 id="results-title"></h2>
+          <p id="results-meta" class="muted"></p>
+        </div>
+        <label class="strength">
+          Connections shown
+          <select id="strength">
+            <option value="0">All</option>
+            <option value="0.4">Medium and strong</option>
+            <option value="0.55">Strong only</option>
+          </select>
+        </label>
+      </div>
+      <ol id="timeline" class="timeline"></ol>
+    </section>
+  </main>
+
+  <footer class="footer muted">
+    Events are extracted automatically from news articles, so wording can be rough and some links will be wrong.
+    Article text © its publisher; follow the links to read the originals.
+  </footer>
+
+  <dialog id="key-dialog">
+    <form method="dialog" id="key-form">
+      <h2>API key</h2>
+      <p>This site reads from the Temporal Knowledge Graph API, which needs a key. Ask your team for it.
+        It is saved only in this browser.</p>
+      <input id="key-input" type="password" placeholder="Paste the API key" aria-label="API key" autocomplete="off">
+      <p id="key-error" class="error hidden"></p>
+      <div class="dialog-actions">
+        <button type="button" class="ghost" id="key-clear">Forget key</button>
+        <button type="submit" id="key-save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

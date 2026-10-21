@@ -192,3 +192,50 @@ def test_cors_allows_only_configured_origins():
         other = client.get("/health", headers={"Origin": "https://evil.example"})
     assert ok.headers.get("access-control-allow-origin") == "https://app.example"
     assert "access-control-allow-origin" not in other.headers
+
+
+def ui_responses() -> dict[str, Any]:
+    # Article and top-entity queries first: the fake matches the first needle found in a query.
+    return {
+        "MATCH (a:Article {id: id})": [
+            {"id": "art1", "title": "Headline", "url": "https://example.com/a", "source": "The Guardian",
+             "date": dt.date(2024, 6, 20)},
+        ],
+        "count(DISTINCT e) AS events": [{"id": "ent1", "name": "Bank of England", "type": "ORG", "events": 13}],
+        **responses(),
+    }
+
+
+def test_articles_endpoint_returns_headlines():
+    with make_client(ui_responses()) as client:
+        response = client.get("/articles", params={"ids": "art1, art1,"})
+    assert response.status_code == 200
+    assert response.json() == [{"id": "art1", "title": "Headline", "url": "https://example.com/a",
+                                "source": "The Guardian", "date": "2024-06-20"}]
+
+
+def test_articles_endpoint_caps_the_number_of_ids():
+    with make_client(ui_responses()) as client:
+        response = client.get("/articles", params={"ids": ",".join(f"a{i}" for i in range(201))})
+    assert response.status_code == 422
+
+
+def test_top_entities_endpoint():
+    with make_client(ui_responses()) as client:
+        response = client.get("/entities/top", params={"limit": 5})
+    assert response.json() == [{"id": "ent1", "name": "Bank of England", "type": "ORG", "events": 13}]
+
+
+def test_new_endpoints_require_the_api_key():
+    with make_authed_client() as client:
+        assert client.get("/articles", params={"ids": "a"}).status_code == 401
+        assert client.get("/entities/top").status_code == 401
+
+
+def test_ui_is_served_publicly_without_shadowing_the_api():
+    with make_authed_client() as client:
+        page = client.get("/")
+        assert page.status_code == 200 and "Storyline" in page.text
+        assert client.get("/app.js").status_code == 200
+        assert client.get("/events/evt1").status_code == 401  # API route wins over the static mount
+        assert client.get("/openapi.json").status_code == 200

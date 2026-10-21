@@ -26,6 +26,18 @@ GitHub Actions (daily 06:17 UTC)                       Render (Docker web servic
 | Read API | `Dockerfile` + `render.yaml`, auto-deploys from `main` after CI passes | Render env: `NEO4J_*`, `API_KEYS` (generated), `API_CORS_ORIGINS` |
 | Tests' database | local: `docker compose --profile test up -d neo4j-test`; CI: service container | `NEO4J_TEST_*` (never the real database) |
 
+### Web UI ("Storyline")
+
+The API serves a small browser UI at `/` (`graphdb/static/`, plain HTML/CSS/JS, no build step). Pick a person,
+organisation, topic or date range to see its events as a timeline. Each event shows the source headline and
+link and the events it led to / follows from, with the reason in plain words. Search URLs are shareable
+(`/?entity=Bank%20of%20England`).
+
+- Same origin as the API, so no CORS setup is needed.
+- On first visit it asks for an API key (one of `API_KEYS`), stored only in that browser's localStorage.
+  Anyone you give the URL and a key can read the graph; rotate keys as in the runbook below.
+- Locally: `API_KEYS=dev .venv/bin/uvicorn graphdb.api:app --port 8000`, open http://localhost:8000 and enter `dev`.
+
 ### First deployment
 
 1. **GitHub secrets:** repo → Settings → Secrets and variables → Actions → add `GUARDIAN_API_KEY`, `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` (the Aura values).
