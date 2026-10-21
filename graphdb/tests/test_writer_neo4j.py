@@ -44,10 +44,10 @@ def _precedes_pairs(client: Neo4jClient, event_ids: set[str]) -> list[tuple[str,
     rows = client.run(
         "MATCH (a:Event)-[:PRECEDES]->(b:Event) "
         "WHERE a.id IN $ids AND b.id IN $ids "
-        "RETURN a.id AS a, b.id AS b ORDER BY a.date, a.id, b.date, b.id",
+        "RETURN a.id AS from_id, b.id AS to_id ORDER BY a.date, a.id, b.date, b.id",
         {"ids": sorted(event_ids)},
     )
-    return [(str(row["a"]), str(row["b"])) for row in rows]
+    return [(str(row["from_id"]), str(row["to_id"])) for row in rows]
 
 
 def _with_out_of_order_event(output):

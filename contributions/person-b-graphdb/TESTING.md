@@ -369,3 +369,42 @@ None observed in Stages 0–6.
 - `EXPLAIN`/`PROFILE` output for index usage is required in Stage 3 and will be pasted or summarized with
   the exact query and observed plan.
 - Year-only dates are a known correctness limitation, not a test failure of the graph lane.
+
+## 7. Live verification (2026-10-21)
+
+Real data: Neo4j Aura (`neo4j+s://`, Neo4j 5.27-aura enterprise). Tests: local `neo4j-test` Compose
+service (`neo4j:5.26.32-community`, `bolt://localhost:7688`). See the ADR-0001 amendment.
+
+| Check | Command | Observed |
+|---|---|---|
+| Health | `python -m graphdb.health` | `Neo4j health: OK`, server `Neo4j 5.27-aura` |
+| Schema | `python -m graphdb.apply_schema` | indexes 4/4, constraints 4/4 (`topic_name` covered by `topic_name_unique`) |
+| Writer, 1st run | `python -m graphdb.writer` (15 Guardian articles, 74 events, 81 links) | 287 nodes and 696 relationships created, 73 `PRECEDES` rebuilt |
+| Writer, 2nd run | same | 0 created, 287 nodes / 696 relationships matched: idempotent |
+| Entity chain | `chain_by_entity(client, "Bank of England")` | exact match, 13 events, 24 links |
+| Integration tests | `pytest -m integration` (against `neo4j-test`) | 5 passed |
+| Full suite | `pytest` | 155 passed, 0 skipped |
+| Aura untouched by tests | node/relationship counts before and after `pytest -m integration` | 287 / 769 both times |
+
+Index evidence for the date-range lookup (`explain_events_in_date_range`), observed plan:
+
+```text
+ProduceResults
+  PartialSort            `e.date` ASC, id ASC
+    Projection           cache[e.date] AS `e.date`
+      Projection         e.id AS id
+        NodeIndexSeekByRange   RANGE INDEX e:Event(date) WHERE date >= ... AND date <= ...
+```
+
+The plan names the index by label/property (`Event(date)`), not by its name `event_date`; the test now
+asserts on `NodeIndexSeekByRange` + `Event(date)`.
+
+Defects found by the first live run and fixed on `feature/graphdb-live-test-fixes`:
+
+1. `explain_events_in_date_range` always returned `[]`: `EXPLAIN` yields no records and the plan is on the
+   result summary. Added `Neo4jClient.explain()`, which returns `summary.plan`.
+2. `_precedes_pairs` in `test_writer_neo4j.py` failed with `CypherTypeError`: `RETURN a.id AS a` shadowed
+   the node variable used by `ORDER BY a.date`. The aliases were renamed.
+3. Test isolation and the Compose `NEO4J_*` variables: see the ADR-0001 amendment.
+
+Still not executed live: the FastAPI server with the Postman/curl examples, and `python -m graphdb.export`.

@@ -80,3 +80,28 @@ unset, integration tests skip and the skip is recorded as a skip, not a pass.
 - Aura free limits or quotas block the test approach.
 - The project obtains a disposable database or a second instance.
 - Integration tests become slow or interfere with each other despite the `test_` namespace.
+
+## Amendment (2026-10-21): dedicated test database
+
+**Status:** supersedes the shared-database test isolation above.
+
+The first live run against Aura showed that namespaced ids do not isolate tests from real data:
+
+- `test_e2e_pipeline_neo4j.py` runs the real pipeline, so its entity/topic ids are real ids (e.g. the
+  `United States` entity) shared with production data. Its cleanup deleted 3 real nodes and their edges.
+- `PRECEDES` is rebuilt globally across all `Event` nodes, so fixture events joined the real chain, and
+  deleting them left a gap in it. Count assertions such as `precedes_rebuilt == 3` also cannot hold on a
+  non-empty database (observed: 77).
+
+Decision:
+
+- Integration tests run only against a throwaway database configured by `NEO4J_TEST_*`
+  (`load_neo4j_test_config`), defaulting to the `neo4j-test` Compose service on `bolt://localhost:7688`.
+- The test URI must differ from `NEO4J_URI` and must be local unless `NEO4J_TEST_ALLOW_REMOTE=true`.
+- `conftest.py` redirects every `NEO4J_*` reader to the test database and wipes it before each
+  integration test; the schema is applied once per session. Tests may assume an empty graph.
+- `NEO4J_*` (Aura) holds real data only. Tests are skipped when `NEO4J_TEST_URI` is unset.
+
+The Compose file has now been executed: the original `neo4j` service could not have started, because the
+image converts every `NEO4J_*` container variable into a server setting and rejects unknown ones
+(`NEO4J_USER`, `NEO4J_PASSWORD`). Healthcheck credentials are now passed as `HEALTHCHECK_*`.

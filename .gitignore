@@ -71,3 +71,6 @@ __pycache__/
 data/exports/
 # Fetched Guardian content: their terms don't allow republishing full article text
 data/guardian_*.json
+
+# Neo4j Aura credential downloads
+Neo4j-*.txt

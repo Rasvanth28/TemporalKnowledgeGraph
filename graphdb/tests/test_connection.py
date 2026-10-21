@@ -102,3 +102,34 @@ def test_context_manager_closes_driver():
     with Neo4jClient(make_config(), driver=driver) as client:
         assert client.driver is driver
     assert driver.closed is True
+
+
+class FakePlanResult:
+    """EXPLAIN yields no records; the plan lives on the consumed summary."""
+
+    def __init__(self, plan: dict[str, Any]):
+        self.plan = plan
+
+    def __iter__(self):
+        return iter([])
+
+    def consume(self):
+        return self
+
+
+class FakePlanSession(FakeSession):
+    def run(self, query: str, parameters: dict[str, Any]):
+        self.queries.append((query, parameters))
+        return FakePlanResult({"operatorType": "NodeIndexSeekByRange", "arguments": {"Details": "event_date"}})
+
+
+def test_explain_returns_plan_from_summary_not_records():
+    driver = FakeDriver()
+    driver.session = lambda database: driver.sessions.append(FakePlanSession(database)) or driver.sessions[-1]
+    client = Neo4jClient(make_config(), driver=driver)
+
+    assert client.run("EXPLAIN MATCH (e:Event) RETURN e") == []
+    plan = client.explain("EXPLAIN MATCH (e:Event) RETURN e")
+
+    assert plan["operatorType"] == "NodeIndexSeekByRange"
+    assert all(session.closed for session in driver.sessions)
