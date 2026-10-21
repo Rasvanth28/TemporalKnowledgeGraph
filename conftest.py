@@ -1,8 +1,8 @@
-"""Shared pytest setup for every lane (graphdb, rmi, pipeline).
+"""Shared pytest setup for every lane (graphdb, pipeline).
 
 This lives at the repository root on purpose: ``pytest_collection_modifyitems`` sees
 *all* collected tests no matter which conftest defines it, so per-lane copies of the
-integration rules interfere with each other (an rmi/ copy keyed on NEO4J_URI silently
+integration rules interfere with each other (a per-lane copy keyed on NEO4J_URI once silently
 skipped every graphdb integration test in CI). Keep one copy, here.
 
 Integration tests run only against a dedicated throwaway database configured by

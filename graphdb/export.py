@@ -87,7 +87,7 @@ def export_from_graph(client: Neo4jClient, path: str | Path) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Export flat event-key rows from Neo4j for Person C's RMI lane."
+        description="Export flat event-key rows (one per event, sorted by date) from Neo4j."
     )
     parser.add_argument(
         "--output",
