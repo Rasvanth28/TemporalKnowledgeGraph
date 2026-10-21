@@ -221,6 +221,44 @@ executed against a live server.
 One warning is emitted: `StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated;
 install httpx2 instead.` It is a dependency advisory for the test client, not an API behavior failure.
 
+### Stage 5 export results
+
+```text
+python -m graphdb.export --output data/exports/graph_event_keys.csv
+[not executable without .env]
+
+python -m pytest graphdb/tests/test_export_unit.py -q
+6 passed
+
+python -m pytest graphdb/tests -m "not integration" -q
+64 passed, 5 deselected
+
+python -m pytest -q
+106 passed, 5 skipped, 1 warning
+```
+
+The unit test asserts `EVENT_KEY_COLUMNS == pipeline.export.EVENT_KEY_COLUMNS` and checks date-key
+computation, sorting, CSV header/order, missing article ids, and row filtering. The live export test is
+skipped without `NEO4J_URI`.
+
+### Stage 6 end-to-end results
+
+The prepared `test_e2e_pipeline_neo4j.py` runs:
+
+```text
+data/sample_articles.json
+  -> Person A's run_pipeline(JsonFileSource, SpacyExtractor, LinkConfig)
+  -> PipelineWriter
+  -> event_by_id / events_in_date_range
+  -> graph export
+  -> comparison with pipeline.export.write_event_keys_csv
+```
+
+It is skipped without `NEO4J_URI`. It cleans up the exact article/event/entity/topic ids produced by that
+run and never wipes the database. No live result is claimed.
+
+Final documentation audit: 78 relative links checked, 0 missing; Postman and fixture JSON parse cleanly.
+
 ## 5. Results
 
 ### Passed
@@ -283,9 +321,20 @@ Stage 4 API checks:
 - Full suite: 100 passed, 3 skipped, 1 dependency warning.
 - Live HTTP calls against Aura: not executable without `.env`.
 
+Stage 5 export checks:
+
+- `graphdb/tests/test_export_unit.py`: 6 passed.
+- Column contract equals `pipeline.export.EVENT_KEY_COLUMNS`.
+- Live graph export: skipped without `NEO4J_URI`.
+
+Stage 6 end-to-end checks:
+
+- `pytest -q`: 106 passed, 5 skipped, 1 dependency warning.
+- Official sample pipeline → writer → query → export: skipped without `NEO4J_URI`.
+
 ### Failed
 
-None observed in Stages 0–4.
+None observed in Stages 0–6.
 
 ### Skipped
 
@@ -299,6 +348,8 @@ None observed in Stages 0–4.
   round-trip and the date-range `EXPLAIN` index evidence.
 - API live calls: not executed. The API unit tests use an injected fake client; no HTTP server was started
   against Aura because `.env` is missing.
+- Export integration (`test_export_neo4j.py`): skipped without `NEO4J_URI`.
+- End-to-end pipeline integration (`test_e2e_pipeline_neo4j.py`): skipped without `NEO4J_URI`.
 
 ### Not executable
 
@@ -309,6 +360,7 @@ None observed in Stages 0–4.
   round-trip is Stage 6 and requires a configured `.env`.
 - Live `EXPLAIN`/`PROFILE` evidence: not executable without Aura; the integration test is prepared.
 - Live API and Postman/curl requests: not executable without a configured server-side `.env`.
+- Live graph export and official-sample end-to-end round-trip: not executable without Aura.
 
 ## 6. Evidence policy
 

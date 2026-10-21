@@ -88,6 +88,15 @@ The API exposes:
 See `contributions/person-b-graphdb/api/API_CONTRACT.md` for models, limits, and error codes, plus the
 Postman collection and curl examples. The OpenAPI document is at `/openapi.json`.
 
+### 7. Export the flat event-key dataset
+
+```powershell
+python -m graphdb.export --output data/exports/graph_event_keys.csv
+```
+
+Columns: `event_id, date_key, date, date_source, type, article_id`. `date_key` is days since
+1970-01-01, sorted by `(date_key, event_id)`, matching the ML/NLP pipeline's existing contract.
+
 ### Known limitations
 
 - Year-only dates are stored as 1 January, so date ranges that start after 1 January can miss them.
