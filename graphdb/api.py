@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from pydantic import BaseModel, Field
 
+from common.embed import Embedder, get_embedder
 from common.log import configure_logging
 from graphdb.config import Neo4jConfig, load_neo4j_config
 from graphdb.connection import Neo4jClient
@@ -40,6 +41,8 @@ from graphdb.queries import (
     articles_by_ids,
     top_entities,
 )
+
+from graphdb.search import DEFAULT_EVENTS, MAX_EVENTS, search_graph
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -107,6 +110,37 @@ class TopEntityModel(EntityModel):
     events: int
 
 
+class InterpretationModel(BaseModel):
+    entities: list[dict[str, Any]] = Field(default_factory=list)
+    start: str | None = None
+    end: str | None = None
+    date_text: str | None = None
+    keywords: list[str] = Field(default_factory=list)
+    semantic: bool = False
+
+
+class GraphNodeModel(BaseModel, extra="allow"):
+    id: str
+    kind: Literal["event", "entity", "topic"]
+    label: str | None = None
+    degree: int = 0
+
+
+class GraphEdgeModel(BaseModel):
+    source: str
+    target: str
+    kind: Literal["involves", "about", "linked_to"]
+    confidence: float | None = None
+    reason: str | None = None
+
+
+class GraphModel(BaseModel):
+    query: str
+    interpretation: InterpretationModel
+    nodes: list[GraphNodeModel] = Field(default_factory=list)
+    edges: list[GraphEdgeModel] = Field(default_factory=list)
+
+
 class Neo4jHealthModel(BaseModel):
     connected: bool
     database: str
@@ -133,6 +167,7 @@ def create_app(
     config: Neo4jConfig | None = None,
     api_keys: Sequence[str] | None = None,
     cors_origins: Sequence[str] | None = None,
+    embedder: Embedder | None = None,
 ) -> FastAPI:
     """Create the FastAPI app.
 
@@ -159,6 +194,8 @@ def create_app(
                                "(set API_AUTH_DISABLED=true for local development only)")
         if auth_disabled:
             log.warning("API authentication is disabled")
+        # Injected (tests) or the shared model; None means prompt search uses keywords only.
+        app.state.embedder = embedder if (embedder is not None or client is not None) else get_embedder()
         if client is not None:
             app.state.neo4j_client = client
             app.state.neo4j_config = config or _FAKE_TEST_CONFIG
@@ -312,6 +349,18 @@ def create_app(
         neo4j_client: Neo4jClient = Depends(get_client),
     ):
         return top_entities(neo4j_client, limit=limit)
+
+    @app.get("/graph", response_model=GraphModel, dependencies=protected)
+    def graph(
+        request: Request,
+        q: str = Query(..., min_length=1, max_length=500, description="Free-text prompt"),
+        limit: int = Query(DEFAULT_EVENTS, ge=1, le=MAX_EVENTS, description="Max events in the graph"),
+        neo4j_client: Neo4jClient = Depends(get_client),
+    ):
+        try:
+            return search_graph(neo4j_client, q, request.app.state.embedder, limit=limit)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     # The browser UI. Mounted last so every API route above takes precedence.
     if STATIC_DIR.is_dir():

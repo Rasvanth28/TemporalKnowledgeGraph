@@ -14,9 +14,14 @@ WORKDIR /app
 COPY requirements-api.txt .
 RUN pip install -r requirements-api.txt
 
+# Bake the embedding model (~30 MB) into the image: no download at startup, works offline.
+ENV HF_HOME=/app/.hf
+RUN python -c "from model2vec import StaticModel; StaticModel.from_pretrained('minishlab/potion-base-8M')"
+ENV HF_HUB_OFFLINE=1
+
 COPY common/ common/
 COPY graphdb/ graphdb/
-RUN rm -rf graphdb/tests && useradd --create-home --uid 10001 api
+RUN rm -rf graphdb/tests && useradd --create-home --uid 10001 api && chown -R api /app/.hf
 USER api
 
 EXPOSE 8000
