@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from rmi.benchmark import benchmark_lookup, main, run_synthetic_benchmark

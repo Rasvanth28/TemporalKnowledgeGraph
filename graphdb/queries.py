@@ -485,3 +485,56 @@ def explain_events_in_date_range(
         "EXPLAIN " + _EVENTS_IN_DATE_RANGE_EXPLAIN,
         {"start": start_text, "end": end_text},
     )
+
+
+_EVENTS_FOR_LINKING = """
+MATCH (a:Article)-[:DESCRIBES]->(e:Event)
+WHERE e.date >= date($start) AND e.date <= date($end)
+OPTIONAL MATCH (e)-[:INVOLVES]->(n:Entity)
+OPTIONAL MATCH (e)-[:ABOUT]->(t:Topic)
+WITH e, min(a.id) AS article_id,
+     [x IN collect(DISTINCT {id: n.id, name: n.name, type: n.type}) WHERE x.id IS NOT NULL] AS entities,
+     head(collect(DISTINCT t.name)) AS topic
+RETURN e.id AS id, e.description AS description, e.date AS date, e.type AS type,
+       coalesce(e.date_source, 'explicit') AS date_source, coalesce(e.source_text, '') AS source_text,
+       article_id, entities, coalesce(topic, 'general') AS topic
+ORDER BY e.date, e.id
+LIMIT $limit
+"""
+
+_EXISTING_ARTICLE_IDS = "UNWIND $ids AS id MATCH (a:Article {id: id}) RETURN a.id AS id"
+
+_LATEST_ARTICLE_DATE = "MATCH (a:Article) RETURN max(a.date) AS latest"
+
+
+def events_for_linking(
+    client: Neo4jClient,
+    start: dt.date | str,
+    end: dt.date | str,
+    limit: int = 20000,
+) -> list[dict[str, Any]]:
+    """Events in a date window with everything the pipeline's linker scores on.
+
+    Used by incremental ingestion to link new events to ones already in the graph.
+    ``limit`` is a safety cap, not pagination; callers should keep windows bounded.
+    """
+
+    rows = client.run(
+        _EVENTS_FOR_LINKING,
+        {"start": _coerce_date(start, "start"), "end": _coerce_date(end, "end"), "limit": int(limit)},
+    )
+    for row in rows:
+        row["date"] = _iso_date(row["date"])
+    return rows
+
+
+def existing_article_ids(client: Neo4jClient, ids: list[str]) -> set[str]:
+    if not ids:
+        return set()
+    return {str(row["id"]) for row in client.run(_EXISTING_ARTICLE_IDS, {"ids": sorted(set(ids))})}
+
+
+def latest_article_date(client: Neo4jClient) -> dt.date | None:
+    rows = client.run(_LATEST_ARTICLE_DATE)
+    latest = _iso_date(rows[0]["latest"]) if rows else None
+    return dt.date.fromisoformat(latest) if latest else None

@@ -1,0 +1,14 @@
+# Only common/, graphdb/ and requirements-api.txt are copied; keep everything else (and secrets) out of the build context.
+.git
+.github
+.venv
+.env
+.env.*
+!.env.example
+Neo4j-*.txt
+data/
+Practice/
+Documentation/
+contributions/
+**/__pycache__
+**/.pytest_cache

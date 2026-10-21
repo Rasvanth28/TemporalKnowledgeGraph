@@ -1,6 +1,9 @@
 import datetime
+import logging
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from common.schema import Article
 from pipeline.extract import get_id
@@ -8,6 +11,18 @@ from pipeline.ingest import RawArticle
 
 GUARDIAN_URL = "https://content.guardianapis.com/search"
 MAX_PAGE_SIZE = 50
+
+log = logging.getLogger(__name__)
+
+
+def retrying_session(retries: int = 5, backoff: float = 2.0) -> requests.Session:
+    # Rate limits (429) and transient server errors are retried with exponential backoff,
+    # honouring Retry-After. Auth errors (401/403) are not retried.
+    retry = Retry(total=retries, backoff_factor=backoff, status_forcelist=(429, 500, 502, 503, 504),
+                  allowed_methods=frozenset({"GET"}), respect_retry_after_header=True, raise_on_status=False)
+    session = requests.Session()
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    return session
 
 
 class GuardianError(RuntimeError):
@@ -28,7 +43,7 @@ class GuardianSource:
         self.max_articles = max_articles
         self.section = section
         self.order_by = order_by
-        self.session = session or requests.Session()
+        self.session = session or retrying_session()
         self.timeout = timeout
 
     def _params(self, page: int) -> dict:
@@ -53,6 +68,8 @@ class GuardianSource:
         resp = self.session.get(GUARDIAN_URL, params=self._params(page), timeout=self.timeout)
         if resp.status_code == 401 or resp.status_code == 403:
             raise GuardianError("Guardian API rejected the key (check GUARDIAN_API_KEY)")
+        if resp.status_code == 429:
+            raise GuardianError("Guardian API rate limit still exceeded after retries")
         resp.raise_for_status()
         body = resp.json().get("response", {})
         if body.get("status") != "ok":
@@ -76,13 +93,17 @@ class GuardianSource:
 
     def load(self) -> list[RawArticle]:
         raws = []
-        page, pages = 1, 1
+        page, pages, total = 1, 1, 0
         while page <= pages and len(raws) < self.max_articles:
             body = self._get(page)
             pages = body.get("pages", 1)
+            total = body.get("total", 0)
             for item in body.get("results", []):
                 raw = self.parse_result(item)
                 if raw is not None:
                     raws.append(raw)
             page += 1
+        log.info("guardian fetch", extra={"fields": {"query": self.query, "articles": min(len(raws), self.max_articles), "available": total}})
+        if total > self.max_articles:
+            log.warning("guardian results capped", extra={"fields": {"query": self.query, "available": total, "max_articles": self.max_articles}})
         return raws[:self.max_articles]

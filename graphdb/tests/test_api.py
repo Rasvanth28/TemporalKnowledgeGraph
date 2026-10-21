@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from graphdb.api import create_app
@@ -157,3 +158,37 @@ def test_openapi_lists_the_stable_paths():
     assert "/chains/entity" in paths
     assert "/chains/topic" in paths
     assert "/chains/date-range" in paths
+
+
+def make_authed_client(**kwargs) -> TestClient:
+    app = create_app(client=FakeApiClient(responses()), config=TEST_CONFIG, api_keys=["key-one", "key-two"], **kwargs)
+    return TestClient(app)
+
+
+def test_protected_routes_require_a_valid_api_key():
+    with make_authed_client() as client:
+        assert client.get("/events/evt_1").status_code == 401
+        assert client.get("/events/evt_1", headers={"X-API-Key": "wrong"}).status_code == 401
+        assert client.get("/events/evt_1", headers={"X-API-Key": "key-two"}).status_code == 200
+
+
+def test_health_stays_public_with_auth_enabled():
+    with make_authed_client() as client:
+        assert client.get("/health").status_code == 200
+
+
+def test_real_app_refuses_to_start_without_api_keys(monkeypatch):
+    monkeypatch.delenv("API_KEYS", raising=False)
+    monkeypatch.delenv("API_AUTH_DISABLED", raising=False)
+    app = create_app(api_keys=[])
+    with pytest.raises(RuntimeError, match="API_KEYS"):
+        with TestClient(app):
+            pass
+
+
+def test_cors_allows_only_configured_origins():
+    with make_authed_client(cors_origins=["https://app.example"]) as client:
+        ok = client.get("/health", headers={"Origin": "https://app.example"})
+        other = client.get("/health", headers={"Origin": "https://evil.example"})
+    assert ok.headers.get("access-control-allow-origin") == "https://app.example"
+    assert "access-control-allow-origin" not in other.headers
