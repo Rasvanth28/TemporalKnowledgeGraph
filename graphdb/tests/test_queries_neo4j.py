@@ -84,7 +84,10 @@ def test_query_round_trip_and_index_evidence():
         assert len(range_chain["events"]) == 4
 
         plan_text = json.dumps(explain_events_in_date_range(client, "2026-01-01", "2026-12-31"), default=str)
-        assert "event_date" in plan_text
+        # Plans describe an index by label/property ("RANGE INDEX e:Event(date)"), not by its
+        # name (event_date); an index seek rather than a label scan is the evidence.
+        assert "NodeIndexSeekByRange" in plan_text
+        assert "Event(date)" in plan_text
     finally:
         try:
             _cleanup(client, node_ids, topic_names)

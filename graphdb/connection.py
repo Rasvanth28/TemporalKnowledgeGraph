@@ -50,6 +50,22 @@ class Neo4jClient:
             result = session.run(query, dict(parameters or {}))
             return [record.data() for record in result]
 
+    def explain(
+        self,
+        query: str,
+        parameters: Mapping[str, Any] | None = None,
+        database: str | None = None,
+    ) -> dict[str, Any]:
+        """Return the query plan of an ``EXPLAIN``/``PROFILE`` query.
+
+        Plans are not result records: ``EXPLAIN`` returns zero rows and puts the
+        plan on the result summary, so ``run()`` would always return ``[]``.
+        """
+
+        with self.session(database) as session:
+            summary = session.run(query, dict(parameters or {})).consume()
+            return dict(summary.plan or {})
+
     def execute_write(
         self,
         work: Callable[[Any], Any],

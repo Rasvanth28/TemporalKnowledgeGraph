@@ -11,19 +11,42 @@ services:
       - "7687:7687"
     environment:
       NEO4J_AUTH: "${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}"
-      NEO4J_USER: "${NEO4J_USER:-neo4j}"
-      NEO4J_PASSWORD: "${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}"
+      # Not NEO4J_*: the image turns every NEO4J_* variable into a server setting and refuses unknown ones.
+      HEALTHCHECK_USER: "${NEO4J_USER:-neo4j}"
+      HEALTHCHECK_PASSWORD: "${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}"
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
     healthcheck:
       test:
         - CMD-SHELL
-        - "cypher-shell -u \"$${NEO4J_USER}\" -p \"$${NEO4J_PASSWORD}\" 'RETURN 1' >/dev/null 2>&1 || exit 1"
+        - "cypher-shell -u \"$${HEALTHCHECK_USER}\" -p \"$${HEALTHCHECK_PASSWORD}\" 'RETURN 1' >/dev/null 2>&1 || exit 1"
       interval: 10s
       timeout: 10s
       retries: 12
       start_period: 40s
+
+  # Throwaway database for integration tests (pytest wipes it before every test).
+  # Never holds real data; no volume, so `docker compose down` discards it.
+  # Start: docker compose --profile test up -d neo4j-test
+  neo4j-test:
+    image: neo4j:5.26.32-community
+    container_name: temporal-knowledge-graph-neo4j-test
+    profiles: ["test"]
+    ports:
+      - "7475:7474"
+      - "7688:7687"
+    environment:
+      NEO4J_AUTH: "neo4j/${NEO4J_TEST_PASSWORD:?Set NEO4J_TEST_PASSWORD in .env}"
+      HEALTHCHECK_PASSWORD: "${NEO4J_TEST_PASSWORD:?Set NEO4J_TEST_PASSWORD in .env}"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "cypher-shell -u neo4j -p \"$${HEALTHCHECK_PASSWORD}\" 'RETURN 1' >/dev/null 2>&1 || exit 1"
+      interval: 5s
+      timeout: 10s
+      retries: 24
+      start_period: 20s
 
 volumes:
   neo4j_data:

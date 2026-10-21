@@ -472,16 +472,16 @@ def explain_events_in_date_range(
     client: Neo4jClient,
     start: dt.date | str,
     end: dt.date | str,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Return the EXPLAIN plan for the date-range lookup.
 
-    Used by the integration index-evidence test. The plan is returned as plain
-    dictionaries; callers should stringify it before asserting on index names.
+    Used by the integration index-evidence test. The plan is a nested plain
+    dictionary; callers should stringify it before asserting on index names.
     """
 
     start_text = _coerce_date(start, "start")
     end_text = _coerce_date(end, "end")
-    return client.run(
+    return client.explain(
         "EXPLAIN " + _EVENTS_IN_DATE_RANGE_EXPLAIN,
         {"start": start_text, "end": end_text},
     )
