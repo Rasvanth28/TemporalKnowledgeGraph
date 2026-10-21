@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Explicit bash = `bash -eo pipefail`, so a failing command in a pipe fails the step.
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install ruff==0.17.1
+      - run: ruff check .
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      # Throwaway database: integration tests wipe it before every test.
+      neo4j:
+        image: neo4j:5.26.32-community
+        env:
+          NEO4J_AUTH: neo4j/ci-throwaway-password
+        ports:
+          - 7688:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p ci-throwaway-password 'RETURN 1'"
+          --health-interval 5s
+          --health-timeout 10s
+          --health-retries 30
+          --health-start-period 20s
+    env:
+      NEO4J_TEST_URI: bolt://localhost:7688
+      NEO4J_TEST_USER: neo4j
+      NEO4J_TEST_PASSWORD: ci-throwaway-password
+      NEO4J_TEST_DATABASE: neo4j
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      # Integration tests must run here, not skip: fail if any test was skipped.
+      - run: pytest -q -rs | tee pytest.log
+      - run: "! grep -q 'skipped' pytest.log"
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -t tkg-api:ci .
+      - name: API refuses to start without API_KEYS
+        run: |
+          if docker run --rm -e NEO4J_URI=bolt://127.0.0.1:1 -e NEO4J_USER=x -e NEO4J_PASSWORD=x tkg-api:ci > out.log 2>&1; then
+            echo "expected a startup failure"; exit 1
+          fi
+          grep -q "API_KEYS is not set" out.log

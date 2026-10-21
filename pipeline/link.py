@@ -116,10 +116,15 @@ def compute_link(a: ExtractedEvent, b: ExtractedEvent, config: LinkConfig = Link
     )
 
 
-def link_events(results: list[ExtractionResult], config: LinkConfig = LinkConfig(), scorer: TopicScorer | None = None) -> list[EventLink]:
+def link_events(results: list[ExtractionResult], config: LinkConfig = LinkConfig(), scorer: TopicScorer | None = None,
+                existing: list[tuple[str, ExtractedEvent]] = ()) -> list[EventLink]:
     # Links always point earlier -> later (ties broken by id), so they can become PRECEDES edges.
-    # O(n^2) over events: fine for hundreds of events; block by date/entity before scaling up.
-    items = [(r.article.id, e) for r in results for e in r.events]
+    # existing: (article_id, event) already in the graph. They are scored against the new events
+    # but never against each other, because an earlier run already linked those pairs.
+    # O(n^2) over events: fine for thousands of events; callers bound `existing` by a date window.
+    new_items = [(r.article.id, e) for r in results for e in r.events]
+    new_ids = {e.event.id for _, e in new_items}
+    items = new_items + [(a, e) for a, e in existing if e.event.id not in new_ids]
     items.sort(key=lambda item: (item[1].event.date, item[1].event.id))
     scorer = scorer or TfidfTopicScorer()
     scorer.fit([e for _, e in items])
@@ -128,11 +133,13 @@ def link_events(results: list[ExtractionResult], config: LinkConfig = LinkConfig
     for i, (article_a, a) in enumerate(items):
         candidates = []
         for article_b, b in items[i+1:]:
+            if a.event.id not in new_ids and b.event.id not in new_ids:
+                continue
             if article_a == article_b and not config.link_within_article:
                 continue
             link = compute_link(a, b, config, scorer)
             if link.confidence >= config.threshold and has_content_signal(link):
                 candidates.append(link)
-        candidates.sort(key=lambda l: (-l.confidence, l.to_event_id))
+        candidates.sort(key=lambda link: (-link.confidence, link.to_event_id))
         links.extend(candidates[:config.top_k])
     return links
