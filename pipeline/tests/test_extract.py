@@ -149,3 +149,9 @@ def test_extractor_caps_events_and_prefers_headline_sentences():
     article = Article(id="a", title="Bank of England cuts interest rates", date=datetime.date(2024,3,21), source="", url="")
     result = SpacyExtractor(ExtractConfig(max_events_per_article=1)).extract(article, text)
     assert [e.event.description for e in result.events] == ["Bank of England cut interest rates"]
+
+def test_extract_topic_drops_possessive_markers():
+    assert extract_topic("The Bank’s monetary policy committee voted to cut rates in August 2024").name == "monetary policy committee"
+    assert extract_topic("The Bank‘s monetary policy committee voted to cut rates in August 2024").name == "monetary policy committee"
+    assert "’s" not in extract_topic("Last week’s budget has made life more complicated for the Bank of England.").name
+    assert "'s" not in extract_topic("Last week's budget made life harder for the Bank of England.").name

@@ -97,3 +97,16 @@ def test_keywords_drop_the_text_of_fuzzy_matched_names():
     meaning = interpret("what did Andrew Baily say about inflation", ENTITIES, TODAY)
     assert names(meaning.entities) == ["Andrew Bailey"]
     assert meaning.keywords == ["inflation"]
+
+
+def test_evidence_quote_shortens_on_a_word_boundary():
+    from graphdb.search import EVIDENCE_CHARS, evidence_quote
+    assert evidence_quote("  The Bank  raised rates. ") == "The Bank raised rates."
+    long = evidence_quote("word " * 200)
+    assert len(long) <= EVIDENCE_CHARS and long.endswith("…") and not long.endswith(" …")
+    assert evidence_quote(None) is None
+
+
+def test_keyword_hits_match_simple_word_forms():
+    from graphdb.search import keyword_hits
+    assert keyword_hits(["rates", "decided", "oil"], "The Bank kept its rate; Opec decides") == ["rates", "decided"]

@@ -269,7 +269,8 @@ OPTIONAL MATCH (a:Article)-[:DESCRIBES]->(e)
 OPTIONAL MATCH (e)-[:INVOLVES]->(n:Entity)
 OPTIONAL MATCH (e)-[:ABOUT]->(t:Topic)
 RETURN e.id AS id, e.description AS description, toString(e.date) AS date, e.type AS type,
-       e.date_source AS date_source, min(a.id) AS article_id,
+       e.date_source AS date_source, min(a.id) AS article_id, e.source_text AS source_text,
+       head(collect(DISTINCT a {.id, .title, .url, .source, date: toString(a.date)})) AS article,
        [x IN collect(DISTINCT {id: n.id, name: n.name, type: n.type}) WHERE x.id IS NOT NULL] AS entities,
        [x IN collect(DISTINCT t.name) WHERE x IS NOT NULL AND x <> 'general'] AS topics
 """
@@ -333,9 +334,25 @@ def search_graph(client: Neo4jClient, prompt: str, embedder: Embedder | None = N
     ranked = fuse(rankings)[:limit]
     graph = build_graph(client, [event_id for event_id, _ in ranked], {e["id"] for e in meaning.entities})
     relevance = dict(ranked)
+    found_by = {source: set(ids) for source, ids in rankings.items()}
+    matched_ids = {e["id"] for e in meaning.entities}
+    involved: dict[str, list[str]] = {}
+    for edge in graph["edges"]:
+        if edge["kind"] == "involves" and edge["target"][2:] in matched_ids:
+            involved.setdefault(edge["source"], []).append(edge["target"])
+    names = {n["id"]: n["label"] for n in graph["nodes"] if n["kind"] == "entity"}
     for node in graph["nodes"]:
-        if node["kind"] == "event":
-            node["relevance"] = round(relevance.get(node["event_id"], 0.0) * RRF_K, 3)
+        if node["kind"] != "event":
+            continue
+        node["relevance"] = round(relevance.get(node["event_id"], 0.0) * RRF_K, 3)
+        # Why this event is in the results, in terms the UI can explain.
+        node["why"] = {
+            "names": [names[n] for n in involved.get(node["id"], [])],
+            "keywords": keyword_hits(meaning.keywords, f"{node['label']} {node.get('evidence') or ''}")
+            if node["event_id"] in found_by.get("keyword", ()) else [],
+            "meaning": node["event_id"] in found_by.get("meaning", ()),
+            "in_date_range": bool(meaning.start or meaning.end),
+        }
     return {
         "query": prompt,
         "interpretation": {
@@ -351,14 +368,20 @@ def build_graph(client: Neo4jClient, event_ids: list[str], matched_entity_ids: s
     """Events plus the entities/topics they connect to, as nodes and edges for a force layout."""
 
     if not event_ids:
-        return {"nodes": [], "edges": []}
+        return {"nodes": [], "edges": [], "sources": []}
     nodes: dict[str, dict[str, Any]] = {}
     edges: list[dict[str, Any]] = []
+    sources: dict[str, dict[str, Any]] = {}
     for row in client.run(_SUBGRAPH_EVENTS, {"ids": event_ids}):
         event_node = f"e:{row['id']}"
         nodes[event_node] = {"id": event_node, "kind": "event", "event_id": row["id"], "label": row["description"],
                              "date": row["date"], "type": row["type"], "date_source": row["date_source"],
-                             "article_id": row["article_id"]}
+                             "article_id": row["article_id"], "evidence": evidence_quote(row.get("source_text"))}
+        article = row.get("article")
+        if article and article.get("id"):
+            sources.setdefault(article["id"], {"id": article["id"], "title": article.get("title"),
+                                               "url": article.get("url"), "publisher": article.get("source"),
+                                               "date": article.get("date")})
         for entity in row["entities"]:
             node_id = f"n:{entity['id']}"
             nodes.setdefault(node_id, {"id": node_id, "kind": "entity", "entity_id": entity["id"],
@@ -378,4 +401,23 @@ def build_graph(client: Neo4jClient, event_ids: list[str], matched_entity_ids: s
         degree[edge["target"]] = degree.get(edge["target"], 0) + 1
     for node_id, node in nodes.items():
         node["degree"] = degree.get(node_id, 0)
-    return {"nodes": list(nodes.values()), "edges": edges}
+    ordered_sources = sorted(sources.values(), key=lambda a: (a.get("date") or "", a["id"]))
+    return {"nodes": list(nodes.values()), "edges": edges, "sources": ordered_sources}
+
+
+EVIDENCE_CHARS = 280
+
+
+def evidence_quote(text: str | None) -> str | None:
+    """The sentence an event was extracted from, shortened to a quote (shown with a link to the source)."""
+
+    text = " ".join((text or "").split())
+    if not text:
+        return None
+    return text if len(text) <= EVIDENCE_CHARS else text[:EVIDENCE_CHARS - 1].rsplit(" ", 1)[0] + "…"
+
+
+def keyword_hits(keywords: list[str], text: str | None) -> list[str]:
+    # Rough stem match ("rates" ~ "rate", "decided" ~ "decide"); only used to explain results.
+    lowered = (text or "").lower()
+    return [k for k in keywords if re.sub(r"(ies|es|s|ed|ing)$", "", k)[:6] in lowered]

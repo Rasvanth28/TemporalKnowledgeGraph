@@ -134,11 +134,20 @@ class GraphEdgeModel(BaseModel):
     reason: str | None = None
 
 
+class SourceModel(BaseModel):
+    id: str
+    title: str | None = None
+    url: str | None = None
+    publisher: str | None = None
+    date: str | None = None
+
+
 class GraphModel(BaseModel):
     query: str
     interpretation: InterpretationModel
     nodes: list[GraphNodeModel] = Field(default_factory=list)
     edges: list[GraphEdgeModel] = Field(default_factory=list)
+    sources: list[SourceModel] = Field(default_factory=list)
 
 
 class Neo4jHealthModel(BaseModel):
