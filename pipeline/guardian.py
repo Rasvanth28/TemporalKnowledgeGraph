@@ -107,3 +107,23 @@ class GuardianSource:
         if total > self.max_articles:
             log.warning("guardian results capped", extra={"fields": {"query": self.query, "available": total, "max_articles": self.max_articles}})
         return raws[:self.max_articles]
+
+
+def fetch_article(api_key: str, url: str, session=None, timeout: float = 20) -> RawArticle | None:
+    """Re-fetch one Guardian article by its web URL (used to re-extract stored articles)."""
+
+    if not api_key:
+        raise GuardianError("GUARDIAN_API_KEY is not set")
+    prefix = "https://www.theguardian.com/"
+    if not url.startswith(prefix):
+        raise GuardianError(f"not a Guardian article URL: {url}")
+    session = session or retrying_session()
+    resp = session.get(f"https://content.guardianapis.com/{url[len(prefix):]}",
+                       params={"api-key": api_key, "show-fields": "headline,bodyText"}, timeout=timeout)
+    if resp.status_code in (401, 403):
+        raise GuardianError("Guardian API rejected the key (check GUARDIAN_API_KEY)")
+    if resp.status_code == 404:
+        return None  # removed by the publisher
+    resp.raise_for_status()
+    content = resp.json().get("response", {}).get("content")
+    return GuardianSource.parse_result(content) if content else None

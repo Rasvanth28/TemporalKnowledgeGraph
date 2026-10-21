@@ -83,6 +83,7 @@ Quotes are single sentences (max 280 characters) shown with attribution and a li
 | Rotate an API key | Render env `API_KEYS=new,old` → deploy → move clients to `new` → remove `old`. |
 | Rotate Neo4j password | Change it in Aura, then update Render env and the GitHub secret `NEO4J_PASSWORD`. |
 | API returns 503 on `/health` / Render deploy never finishes | Read the `error` in the `/health` body. `DatabaseNotFound` means `NEO4J_DATABASE` is wrong (Aura uses the instance id). Otherwise Neo4j is unreachable: check the Aura console. Aura Free pauses idle instances; the daily ingestion keeps it active. |
+| Extraction changed (e.g. a date fix) and stored events are out of date | `python -m scripts.reextract --input data/guardian_articles.json` (dry run: prints what would change), then add `--apply`. Articles not in `--input` are re-fetched from the Guardian by URL. Safe to re-run: a second run reports 0 changes. |
 | Add a news topic | Add a query to `config/ingest_queries.json` via PR. New queries start from the newest article already in the graph. |
 
 **Limits to know:** Render Free sleeps after 15 min idle (first request about 30s); GitHub disables scheduled workflows after 60 days without repository activity; Aura Free caps the graph size (200k nodes / 400k relationships at the time of writing).
@@ -134,6 +135,14 @@ The run writes two files to `data/exports/`:
 - *Rank and cap.* `salience = 3·headline overlap + explicit date + named entities + non-general type + 1/(1+position)`. The top `EXTRACT_MAX_EVENTS` (5) per article are kept, in article order. On 20 real Guardian articles this cut 322 noisy events to about 75.
 
 **Deterministic IDs.** IDs are uuid5 values derived from content: entities from their normalized name plus type, events from article id + description + date. Re-processing the same article produces the same IDs, so `MERGE` in Neo4j doesn't create duplicates. Entity names are normalized ("The Federal Reserve" → "Federal Reserve") and deduped by name within an article, because spaCy sometimes tags the same name PERSON in one place and ORG in another.
+
+**Event dates.** A sentence's date is only used if it says when *that* event happened. Skipped: reference points
+("since 2008", "by 2027", "until the end of 2025", "from X to Y"), dates used as modifiers ("the 2008 crisis",
+"July's election", "a February rate cut"), past years attached to a noun ("the Iraq war in 2003"), year-only mentions
+not introduced by "in"/"during", and anything more than a week after the article (forecasts and targets).
+A bare month means its nearest occurrence; "last month"/"last week" are resolved. Otherwise the event takes the
+article's date (`date_source = inferred`). On the 15-article Guardian sample this moved 23 of 74 event dates,
+all corrections (for example the August 2024 rate cut had been dated 2008).
 
 **Dates.** Only DATE mentions that name a month or year are trusted, plus today, yesterday and tomorrow. Anything else ("Tuesday", "last quarter") falls back to the article's publication date. A mention without a day or month resolves to the start of its period, unless that period contains the publication date. For example, "March 2024" in an article published on 15 March 2024 means 15 March, not 1 March. The first date in a sentence becomes the event's date. `Event.date_source` records whether that date was `explicit` (stated in the sentence) or `inferred` (inherited from the article).
 
