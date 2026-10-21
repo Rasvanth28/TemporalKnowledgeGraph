@@ -99,3 +99,13 @@ def test_results_explain_why_and_cite_sources(client):
     cited = {e["article_id"] for e in events}
     assert {s["id"] for s in result["sources"]} == cited
     assert all(s["url"].startswith("https://") and s["title"] for s in result["sources"])
+
+
+def test_results_include_a_cited_summary(client):
+    result = search_graph(client, "Bank of England interest rates in 2024", get_embedder())
+    summary = result["summary"]
+    cited = {s["id"] for s in result["sources"]}
+    sentences = [s for p in summary["paragraphs"] for s in p["sentences"]]
+    assert sentences and all(s["article_id"] in cited for s in sentences)
+    months = [p["month"] for p in summary["paragraphs"]]
+    assert months == sorted(months)

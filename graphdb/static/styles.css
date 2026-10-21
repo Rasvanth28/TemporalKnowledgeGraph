@@ -183,3 +183,18 @@ blockquote { margin: 0.3rem 0; padding: 0.4rem 0.75rem; border-left: 3px solid v
 .arrow-dot::before { content: "→"; position: absolute; top: -0.45rem; left: -0.1rem; color: var(--accent); font-size: 0.85rem; }
 /* force-graph hover tooltip */
 .float-tooltip-kap { background: var(--surface) !important; color: var(--text) !important; border: 1px solid var(--border); border-radius: 8px !important; padding: 0.35rem 0.55rem !important; font: 0.82rem/1.4 system-ui, sans-serif !important; max-width: 320px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); }
+
+/* ---------- "what happened" summary ---------- */
+.summary { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.4rem 1.2rem; margin: 0.5rem 0 1rem; }
+.summary h2 { margin: 0 0 0.25rem; font-size: 1.3rem; }
+.summary .intro { margin: 0 0 0.8rem; }
+.summary p { max-width: 78ch; line-height: 1.7; margin: 0 0 0.7rem; }
+.summary .month { font-weight: 700; }
+.summary .small { font-size: 0.82rem; margin-top: 0.9rem; }
+.summary h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 1rem 0 0.4rem; }
+.sent { border-radius: 3px; cursor: pointer; }
+.summary .cite { margin: 0 0 0 0.1rem; vertical-align: super; line-height: 0; }
+.sent:hover { background: var(--accent-soft); filter: none; text-decoration: underline; text-decoration-color: var(--accent); }
+.sent.quote { color: var(--muted); }
+.panel details { margin-top: 0.9rem; }
+.panel details > summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }

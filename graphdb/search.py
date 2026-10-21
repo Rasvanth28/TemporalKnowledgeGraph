@@ -29,6 +29,7 @@ from rapidfuzz import fuzz
 from common.embed import Embedder
 from graphdb.connection import Neo4jClient
 from graphdb.search_index import EVENT_TEXT_INDEX, EVENT_VECTOR_INDEX
+from graphdb.summary import build_summary
 
 log = logging.getLogger(__name__)
 
@@ -361,6 +362,7 @@ def search_graph(client: Neo4jClient, prompt: str, embedder: Embedder | None = N
             "keywords": meaning.keywords, "semantic": embedder is not None,
         },
         **graph,
+        "summary": build_summary(graph["nodes"], graph["sources"]),
     }
 
 
