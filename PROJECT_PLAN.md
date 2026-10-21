@@ -9,7 +9,7 @@ This repo starts green-field: an empty `README.md` and one design document (`Doc
 The documented system has two layers:
 
 1. **Neo4j** — the real, working graph database storing `Article`/`Event`/`Entity`/`Topic` nodes and relationships (`DESCRIBES`, `MENTIONS`, `ABOUT`, `INVOLVES`, `PRECEDES`, `LINKED_TO`), fed by an NLP pipeline that does NER + event extraction + confidence-scored event linking. This is the guaranteed-working baseline.
-2. **RMI (Recursive Model Index)** — an experimental learned-index research layer benchmarked against Neo4j's default B+ tree indexing, explicitly allowed to "fail" as a research finding without sinking the project. It must fall back to Neo4j whenever unconfident, and must handle the "update-drift" problem (new events arrive continuously; the model is only retrained periodically).
+2. **RMI (Recursive Model Index)** *(removed 2026-10-21: built and benchmarked against the live graph, it was correct but no faster than Neo4j's B+ tree for this workload, so it was taken out; the code and write-up are in git history and PR #28)* — an experimental learned-index research layer benchmarked against Neo4j's default B+ tree indexing, explicitly allowed to "fail" as a research finding without sinking the project. It must fall back to Neo4j whenever unconfident, and must handle the "update-drift" problem (new events arrive continuously; the model is only retrained periodically).
 
 The point of this build is less about the DB-systems research result and more about using this project to teach two coding-beginner teammates how real production engineering teams operate — git workflow, code review, issue tracking, contracts between modules, testing, docs — under an aggressive 1-week fast-track.
 

@@ -11,7 +11,7 @@ EVENT_KEY_COLUMNS = ["event_id", "date_key", "date", "date_source", "type", "art
 
 
 def date_key(d: datetime.date) -> int:
-    # Days since 1970-01-01: the numeric, sortable key the RMI lane trains on.
+    # Days since 1970-01-01: a numeric, sortable date key.
     return (d - EPOCH).days
 
 

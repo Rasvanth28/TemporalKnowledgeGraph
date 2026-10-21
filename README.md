@@ -1,6 +1,6 @@
 # Temporal Knowledge Graph
 
-News articles → events, entities and topics → confidence-scored links between events → Neo4j (graph lane) and a learned index (RMI lane). See `PROJECT_PLAN.md` for the full plan.
+News articles → events, entities and topics → confidence-scored links between events → Neo4j, served by a FastAPI search UI. See `PROJECT_PLAN.md` for the original plan.
 
 ## Setup
 
@@ -145,7 +145,7 @@ The run writes two files to `data/exports/`:
 | File | For | Contents |
 |---|---|---|
 | `pipeline_output.json` | Graph lane (writer) | Every `ExtractionResult` (article, entities it MENTIONS, events with the entities they INVOLVE and topic they're ABOUT) plus all `EventLink`s |
-| `event_keys.csv` | RMI lane | `event_id, date_key, date, date_source, type, article_id`, sorted by `date_key` (days since 1970-01-01) |
+| `event_keys.csv` | Flat analysis export | `event_id, date_key, date, date_source, type, article_id`, sorted by `date_key` (days since 1970-01-01) |
 
 ### Modules
 

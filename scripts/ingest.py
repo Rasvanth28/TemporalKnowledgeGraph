@@ -39,7 +39,6 @@ def main(argv: list[str] | None = None) -> int:
     from graphdb.capacity import GraphFullError
     from graphdb.config import ConfigurationError, load_neo4j_config
     from graphdb.connection import Neo4jClient
-    from graphdb.export import export_event_keys, write_event_keys_csv
     from graphdb.search_index import embed_missing_events, ensure_search_indexes
     from graphdb.writer import PipelineWriter
     from common.embed import get_embedder
@@ -66,9 +65,6 @@ def main(argv: list[str] | None = None) -> int:
             extra = (lambda start, end: [WikipediaCurrentEventsSource(start, end)]) if config.wikipedia else None
             summary = run_ingest(config, make_source, SpacyExtractor(load_extract_config()), client, writer,
                                  load_link_config(), out_dir=out_dir, since=args.since, extra_sources=extra)
-            if summary.written:
-                keys = write_event_keys_csv(export_event_keys(client), out_dir / "event_keys.csv")
-                log.info("exported event keys", extra={"fields": {"rows": keys, "path": str(out_dir / "event_keys.csv")}})
             # Every non-dry run, even with nothing new: this is also the backfill for older events.
             embedder = None if args.dry_run else get_embedder()
             if embedder is not None:

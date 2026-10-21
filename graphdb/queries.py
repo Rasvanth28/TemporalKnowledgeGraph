@@ -1,7 +1,6 @@
 """Stable query contract for the Graph DB & Backend lane.
 
-These functions are the fallback target for Person C's RMI and the data source
-for the FastAPI layer. They return plain Python dictionaries, never driver
+These functions are the data source for the FastAPI layer. They return plain Python dictionaries, never driver
 objects. Names, parameters, and return shapes are stable; changing them
 requires review from the consuming lane (ADR-0004).
 
@@ -342,8 +341,7 @@ def events_in_date_range(
 ) -> list[dict[str, Any]]:
     """Return events whose native date is in the inclusive range.
 
-    This is the primary RMI fallback target and is intended to use the
-    ``event_date`` range index.
+    Intended to use the ``event_date`` range index.
     """
 
     start_text = _coerce_date(start, "start")

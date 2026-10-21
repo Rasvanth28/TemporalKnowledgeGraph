@@ -69,13 +69,11 @@ jobs:
           if [ -f data/exports/ingest_summary.json ]; then
             { echo '### Ingest summary'; echo '```json'; cat data/exports/ingest_summary.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
-      # Event keys for the RMI lane. ingest_batch.json is not uploaded: it holds Guardian sentences.
+      # ingest_batch.json is not uploaded: it holds Guardian sentences.
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: event-keys-${{ github.run_id }}
-          path: |
-            data/exports/event_keys.csv
-            data/exports/ingest_summary.json
+          name: ingest-summary-${{ github.run_id }}
+          path: data/exports/ingest_summary.json
           if-no-files-found: ignore
           retention-days: 30
