@@ -41,8 +41,9 @@ New in this lane:
 4. [decisions/README.md](decisions/README.md) and the four ADRs — accepted decisions and trade-offs.
 5. [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md) — what changed and why.
 6. [TESTING.md](TESTING.md) — exact environment, commands, results, gaps.
-7. `graphdb/` — implementation, tests, and CQL once Stage 1 begins.
-8. [PROPOSED_ROOT_README_SECTION.md](PROPOSED_ROOT_README_SECTION.md) — eventual shared setup text.
+7. [FINAL_AUDIT.md](FINAL_AUDIT.md) — deliverables, verification matrix, PR map, and limitations.
+8. `graphdb/` — implementation, tests, and CQL.
+9. [PROPOSED_ROOT_README_SECTION.md](PROPOSED_ROOT_README_SECTION.md) — eventual shared setup text.
 
 ## 4. Representative article trace (planned)
 

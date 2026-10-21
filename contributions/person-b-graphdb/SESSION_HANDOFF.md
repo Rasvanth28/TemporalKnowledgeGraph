@@ -1,67 +1,58 @@
 # Session handoff
 
 - **Last updated:** 2026-10-19
-- **Branch:** `feature/graphdb-foundation`
-- **Stage:** Stage 1 implemented; live Aura integration pending; stopped for owner review.
+- **Branch:** `feature/graphdb-export-e2e`
+- **Stage:** Stages 0–6 implementation complete, committed, and pushed; live Aura verification pending.
 
 ## Current status
 
-- Stage 0 scaffold and Stage 1 Neo4j foundation are implemented.
-- All Graph DB unit tests and all Person A tests pass.
-- The real-Neo4j integration test is skipped because `.env` / `NEO4J_URI` is absent.
-- Docker Compose is present but unexecuted because Docker is unavailable.
-- Stage 0/1 are committed and pushed on `feature/graphdb-foundation`.
-- PR 1 is ready for the owner to open from the pushed branch.
+- Foundation, writer, queries, API, export, and end-to-end integration tests are implemented.
+- All unit/mocked/API tests pass; all real-Neo4j integration tests skip without `NEO4J_URI`.
+- All five branches are pushed as a stacked PR chain.
+- No Aura `.env`, no live index evidence, no live API/export/e2e result, no Docker Compose run.
 
 ## Last verified state
 
-- `main` was clean at `b0d9f08` and equal to `origin/main` before branching.
-- Branch `feature/graphdb-foundation` is checked out.
-- `.venv` exists with Python 3.14.0.
-- Existing pinned requirements installed successfully after a timed-out first attempt; no wheel failed.
-- New pins installed and recorded: `fastapi==0.146.0`, `neo4j==6.4.1`, `opentelemetry-api==1.45.1`,
-  `pytz==2026.5`, `starlette==1.9.0`, `uvicorn==0.54.0`.
+- Foundation: `adee66c`, `31b0611`, `8adb072`.
+- Writer: `f348d00`, `44ad8fc`.
+- Queries: `b74ce76`, `61d41af`.
+- API: `9c71874`, `aa87504`.
+- Export/e2e: `1baa2d4` (export, end-to-end verification, final audit).
+- `pytest -q`: 106 passed, 5 skipped, 1 dependency warning.
 - `pip check`: no broken requirements.
 - `compileall graphdb`: exit 0.
-- `pytest graphdb/tests -m "not integration"`: 19 passed, 1 deselected.
-- `pytest pipeline/tests`: 42 passed.
-- `pytest -q`: 61 passed, 1 skipped.
-- Integration skip reason: `NEO4J_URI is not set; integration test skipped`.
-- `graphdb.health` and `graphdb.apply_schema --verify-only` without `.env`: clean missing-variable errors,
-  exit 1, no secrets printed.
-- Final documentation link check: 47 links checked, 0 missing.
-- `opencode.json` remains valid, local, and excluded via `.git/info/exclude`.
-- No shared tracked file other than the approved Stage 1 files was modified.
-- Commits pushed: `adee66c` (foundation) and `31b0611` (PR description).
+- `EVENT_KEY_COLUMNS == pipeline.export.EVENT_KEY_COLUMNS`.
 
-## Next step
+## PR chain and merge order
 
-Stage 2 is stacked on `feature/graphdb-foundation` because PR 1 is not merged yet:
+1. [#8](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/8) `feature/graphdb-foundation` → `main`
+2. [#9](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/9) `feature/graphdb-writer` → `feature/graphdb-foundation`
+3. [#10](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/10) `feature/graphdb-queries` → `feature/graphdb-writer`
+4. [#11](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/11) `feature/graphdb-api` → `feature/graphdb-queries`
+5. [#12](https://github.com/Rasvanth28/TemporalKnowledgeGraph/pull/12) `feature/graphdb-export-e2e` → `feature/graphdb-api`
 
-1. Add the synthetic `pipeline_output.json`-shaped fixture under `graphdb/tests/fixtures/`.
-2. Implement `graphdb/writer.py` with parameterized `MERGE`/`UNWIND`, endpoint validation, counts, and
-   latest-input-wins `LINKED_TO`.
-3. Implement the global `PRECEDES` rebuild after each batch, in one transaction.
-4. Add unit tests and the required idempotency/out-of-order insertion tests.
-5. Run the official sample through the pipeline and writer as a no-regression/count check.
-6. Run against Aura if a local `.env` exists; otherwise record integration as not executable.
+All five are open and `MERGEABLE`; no CI checks are configured. Retarget each PR to `main` after the
+previous one merges. PR descriptions are in `contributions/person-b-graphdb/pr/`.
 
-The Stage 2 PR should target `feature/graphdb-foundation`, not `main`, until PR 1 merges.
+## Next after Aura is configured
+
+1. Fill `.env` locally; never commit or paste it.
+2. Run `python -m graphdb.health` and `python -m graphdb.apply_schema`.
+3. Record live `SHOW INDEXES`, especially `Topic.name` / `topic_name`.
+4. Run `python -m pytest -m integration`.
+5. Record `EXPLAIN`/`PROFILE` evidence in `TESTING.md`.
+6. Run the API and the Postman/curl examples.
+7. Add observed evidence via a follow-up review PR.
 
 ## Open questions
 
-- Is a reachable Aura instance available through the owner's local `.env` for live schema and integration
-  tests?
-- Will stale `LINKED_TO` cleanup become a backlog item or a later writer mode?
-- The exact Neo4j `SHOW INDEXES` behaviour for `Topic.name` versus `topic_name` is still unobserved.
-- The Docker Compose alternative is still untested.
+- Live Aura schema, writer, query, API, export, and index evidence remain unobserved.
+- Docker Compose remains untested.
+- Stale `LINKED_TO` cleanup is still a backlog decision.
+- The `starlette.testclient` `httpx` deprecation may need a dependency decision later.
 
 ## Committed work
 
-- Stage 0 documentation under `contributions/person-b-graphdb/`.
-- Stage 1 code under `graphdb/`.
-- `docker-compose.yml`.
-- Approved shared edits to `requirements.txt` and `.env.example`.
-- Local untracked `opencode.json` and local `.git/info/exclude` line are not committed.
-
-The listed files are committed and pushed on `feature/graphdb-foundation`.
+All Stage 0–6 code, tests, ADRs, API docs, Postman/curl examples, PR descriptions, and
+[FINAL_AUDIT.md](FINAL_AUDIT.md) are committed on the stacked branches. `opencode.json`,
+`.git/info/exclude`, `.venv`, `__pycache__`, `.env`, and generated outputs are not committed.

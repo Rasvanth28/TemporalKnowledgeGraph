@@ -143,6 +143,122 @@ No broken requirements found.
 61 passed, 1 skipped
 ```
 
+### Stage 2 writer results
+
+```text
+python -m compileall -q graphdb
+(exit 0)
+
+python -m pytest graphdb/tests -m "not integration" -q
+33 passed, 2 deselected
+
+python -m pytest -q
+75 passed, 2 skipped
+
+python -m pip check
+No broken requirements found.
+
+python -m graphdb.writer --input graphdb/tests/fixtures/pipeline_output.json
+Writer configuration error: Missing required Neo4J environment variable(s)
+[exit 1; fixture parsed successfully; no secret values printed]
+```
+
+The Stage 2 integration test `test_writer_neo4j.py` was skipped because `NEO4J_URI` is unset. It is the
+live proof of idempotency and the global `PRECEDES` rebuild, including the out-of-order insertion case.
+
+### Stage 3 query results
+
+```text
+python -m compileall -q graphdb
+(exit 0)
+
+python -m pytest graphdb/tests -m "not integration" -q
+48 passed, 3 deselected
+
+python -m pytest -q
+90 passed, 3 skipped
+
+python -m pip check
+No broken requirements found.
+```
+
+Live query and index evidence are not executed without Aura. The prepared integration test
+`graphdb/tests/test_queries_neo4j.py::test_query_round_trip_and_index_evidence` writes the fixture, checks
+entity/date/topic query results, and asserts that the `EXPLAIN` plan for the date-range lookup contains
+`event_date`. Its output is required in this file before Stage 3 can be called live-verified.
+
+### Index-usage evidence
+
+| Query | Evidence | Status |
+|---|---|---|
+| `MATCH (e:Event) WHERE e.date >= date($start) AND e.date <= date($end) RETURN e.id` | `EXPLAIN` plan must contain `event_date` | **Not executable without Aura** |
+| `MATCH (n:Entity {name: $name})` | Exact name match uses `entity_name`; integration test exercises it | **Not executable without Aura** |
+| `MATCH (n:Entity) WHERE toLower(n.name) = toLower($name)` | Deliberately non-indexed fallback; documented in code | **By design** |
+
+### Stage 4 API results
+
+```text
+python -m compileall -q graphdb
+(exit 0)
+
+python -m pytest graphdb/tests/test_api.py -q
+10 passed
+
+python -m pytest graphdb/tests -m "not integration" -q
+58 passed, 3 deselected
+
+python -m pytest -q
+100 passed, 3 skipped, 1 warning
+
+python -m pip check
+No broken requirements found.
+```
+
+API tests use an injected fake Neo4j client. Live HTTP requests against Aura are not executed without a
+configured `.env`. The Postman collection JSON parses successfully; curl examples are documented but not
+executed against a live server.
+
+One warning is emitted: `StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated;
+install httpx2 instead.` It is a dependency advisory for the test client, not an API behavior failure.
+
+### Stage 5 export results
+
+```text
+python -m graphdb.export --output data/exports/graph_event_keys.csv
+[not executable without .env]
+
+python -m pytest graphdb/tests/test_export_unit.py -q
+6 passed
+
+python -m pytest graphdb/tests -m "not integration" -q
+64 passed, 5 deselected
+
+python -m pytest -q
+106 passed, 5 skipped, 1 warning
+```
+
+The unit test asserts `EVENT_KEY_COLUMNS == pipeline.export.EVENT_KEY_COLUMNS` and checks date-key
+computation, sorting, CSV header/order, missing article ids, and row filtering. The live export test is
+skipped without `NEO4J_URI`.
+
+### Stage 6 end-to-end results
+
+The prepared `test_e2e_pipeline_neo4j.py` runs:
+
+```text
+data/sample_articles.json
+  -> Person A's run_pipeline(JsonFileSource, SpacyExtractor, LinkConfig)
+  -> PipelineWriter
+  -> event_by_id / events_in_date_range
+  -> graph export
+  -> comparison with pipeline.export.write_event_keys_csv
+```
+
+It is skipped without `NEO4J_URI`. It cleans up the exact article/event/entity/topic ids produced by that
+run and never wipes the database. No live result is claimed.
+
+Final documentation audit: 78 relative links checked, 0 missing; Postman and fixture JSON parse cleanly.
+
 ## 5. Results
 
 ### Passed
@@ -185,9 +301,40 @@ The health and schema CLIs were run without `.env` and failed cleanly with a mis
 configuration error and exit code 1; no secret values were printed. This is the intended failure path, not a
 successful Neo4j connection.
 
+Stage 2 writer checks:
+
+- `graphdb/tests -m "not integration"`: 33 passed, 2 deselected.
+- Full suite: 75 passed, 2 skipped.
+- Writer CLI parsed the fixture and failed only at configuration, as expected without `.env`.
+- Live writer idempotency/out-of-order test: skipped without Neo4j.
+
+Stage 3 query checks:
+
+- `graphdb/tests -m "not integration"`: 48 passed, 3 deselected.
+- Full suite: 90 passed, 3 skipped.
+- Live query round-trip and `EXPLAIN` index evidence: not executable without Neo4j.
+
+Stage 4 API checks:
+
+- `graphdb/tests/test_api.py`: 10 passed.
+- `graphdb/tests -m "not integration"`: 58 passed, 3 deselected.
+- Full suite: 100 passed, 3 skipped, 1 dependency warning.
+- Live HTTP calls against Aura: not executable without `.env`.
+
+Stage 5 export checks:
+
+- `graphdb/tests/test_export_unit.py`: 6 passed.
+- Column contract equals `pipeline.export.EVENT_KEY_COLUMNS`.
+- Live graph export: skipped without `NEO4J_URI`.
+
+Stage 6 end-to-end checks:
+
+- `pytest -q`: 106 passed, 5 skipped, 1 dependency warning.
+- Official sample pipeline → writer → query → export: skipped without `NEO4J_URI`.
+
 ### Failed
 
-None observed in Stage 0 or Stage 1.
+None observed in Stages 0–6.
 
 ### Skipped
 
@@ -195,13 +342,25 @@ None observed in Stage 0 or Stage 1.
   Exact pytest reason: `NEO4J_URI is not set; integration test skipped`. This is not a pass. The live schema,
   `SHOW INDEXES`, and `Topic.name` interaction remain unobserved.
 - Docker Compose: not executable because Docker is unavailable in the current shell.
+- Writer integration (`test_writer_neo4j.py`): skipped because `NEO4J_URI` is unset. It exercises write →
+  write again → out-of-order insertion and asserts the PRECEDES chain and counts.
+- Query integration (`test_queries_neo4j.py`): skipped because `NEO4J_URI` is unset. It exercises the query
+  round-trip and the date-range `EXPLAIN` index evidence.
+- API live calls: not executed. The API unit tests use an injected fake client; no HTTP server was started
+  against Aura because `.env` is missing.
+- Export integration (`test_export_neo4j.py`): skipped without `NEO4J_URI`.
+- End-to-end pipeline integration (`test_e2e_pipeline_neo4j.py`): skipped without `NEO4J_URI`.
 
 ### Not executable
 
 - Live `python -m graphdb.health`: requires a local `.env` with Aura settings.
 - Live `python -m graphdb.apply_schema`: same dependency; the mocked path is tested.
 - Docker Compose YAML parse: PyYAML is not installed and no new dependency was approved for parsing only.
-- Official pipeline sample round-trip: Stage 2/6 (spaCy is now installed, but the writer does not exist yet).
+- Official pipeline sample round-trip: writer and queries exist (Stages 2–3), but a full end-to-end Aura
+  round-trip is Stage 6 and requires a configured `.env`.
+- Live `EXPLAIN`/`PROFILE` evidence: not executable without Aura; the integration test is prepared.
+- Live API and Postman/curl requests: not executable without a configured server-side `.env`.
+- Live graph export and official-sample end-to-end round-trip: not executable without Aura.
 
 ## 6. Evidence policy
 

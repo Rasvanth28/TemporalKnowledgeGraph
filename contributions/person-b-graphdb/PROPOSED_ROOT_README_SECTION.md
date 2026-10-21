@@ -69,15 +69,33 @@ python -m pytest graphdb/tests -m integration
 
 Integration tests require `NEO4J_URI` and use only `test_`-prefixed ids. They never wipe the database.
 
-### 6. Query and API status
+### 6. Run the API
 
-`graphdb/queries.py` and `graphdb/api.py` are later stages. Once available, the API will expose:
+```powershell
+python -m graphdb.api
+# or: uvicorn graphdb.api:app --host 127.0.0.1 --port 8000
+```
 
-- `/health`
-- entity, date-range, and topic chain queries
-- flat event lookup helpers for the RMI fallback
+The API exposes:
 
-The exact endpoint contract will be documented before implementation.
+- `GET /health`
+- `GET /events/{event_id}`
+- `GET /events?start=...&end=...`
+- `GET /chains/entity?name=...`
+- `GET /chains/topic?topic=...`
+- `GET /chains/date-range?start=...&end=...`
+
+See `contributions/person-b-graphdb/api/API_CONTRACT.md` for models, limits, and error codes, plus the
+Postman collection and curl examples. The OpenAPI document is at `/openapi.json`.
+
+### 7. Export the flat event-key dataset
+
+```powershell
+python -m graphdb.export --output data/exports/graph_event_keys.csv
+```
+
+Columns: `event_id, date_key, date, date_source, type, article_id`. `date_key` is days since
+1970-01-01, sorted by `(date_key, event_id)`, matching the ML/NLP pipeline's existing contract.
 
 ### Known limitations
 
