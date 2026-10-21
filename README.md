@@ -46,6 +46,12 @@ The panel also lists the graph's events in date order. Search URLs are shareable
 The results are merged with reciprocal-rank fusion and filtered by the date range. The UI shows what was understood
 (names, dates, keywords) so results are explainable.
 
+**What happened (summary).** Above the graph, a short chronological summary of the results, grouped into monthly
+paragraphs, with every sentence cited [n] (`graphdb/summary.py`, returned as `summary` by `/graph`). It is *extractive*:
+built only from the articles' own headlines and key sentences, so nothing is invented. The most relevant articles are
+picked (best event first), the same story reported twice within two days is dropped, and question-style headlines are
+replaced by the article's key sentence. Click a sentence to find it in the graph.
+
 **Explanations and sources.** Every result explains itself and cites its source articles as numbered references [1], [2]…
 with headline, publisher, date and link:
 - *The story*: event count and span, the most connected names, and the strongest thread of linked events, each step with its reason.

@@ -204,6 +204,7 @@ async function ask(prompt) {
   if (!getKey()) { openKeyDialog(); return; }
   history.replaceState(null, "", `?${new URLSearchParams({ q: prompt })}`);
   $("workspace").classList.add("hidden");
+  $("summary").classList.add("hidden");
   $("understood").classList.add("hidden");
   showStatus(el("div", { className: "skeleton" }));
   try {
@@ -282,7 +283,64 @@ function renderGraph(result) {
     window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readPalette(); graph.refresh?.(); });
   }
   graph.width(container.clientWidth).height(container.clientHeight).graphData({ nodes, links });
+  renderSummary(result.summary || {});
   showOverview();
+}
+
+// ---------- "what happened": extractive summary, every sentence cited ----------
+const monthFmt = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
+
+function subjectText(meaning) {
+  const parts = [];
+  if (meaning.entities.length) parts.push(listWords(meaning.entities.map((e) => e.name)));
+  if (meaning.keywords.length) parts.push(meaning.entities.length ? `(${meaning.keywords.join(", ")})` : `“${meaning.keywords.join(" ")}”`);
+  return parts.length ? ` about ${parts.join(" ")}` : "";
+}
+
+function renderSummary(summary) {
+  const box = $("summary");
+  const paragraphs = summary.paragraphs || [];
+  if (!paragraphs.length) { box.classList.add("hidden"); return; }
+  const span = summary.start && summary.end
+    ? (summary.start.slice(0, 7) === summary.end.slice(0, 7) ? monthFmt.format(asDate(summary.start)) : `${monthFmt.format(asDate(summary.start))} to ${monthFmt.format(asDate(summary.end))}`)
+    : "";
+  const used = summary.articles_used, total = summary.articles_total;
+  const intro = `What the sources say${subjectText(data.interpretation)}, ${span ? `${span}, ` : ""}based on ${used === total ? plural(used, "article") : `the ${used} most relevant of ${plural(total, "article")}`}.`;
+
+  const body = paragraphs.map((paragraph) => {
+    const p = el("p", {}, el("strong", { className: "month" }, `${monthFmt.format(asDate(`${paragraph.month}-01`))}. `));
+    for (const sentence of paragraph.sentences) {
+      // Don't double up when the sentence is itself a quotation ("“While cutting rates…”, said…").
+      const text = !sentence.quote || /^[“"‘']/.test(sentence.text) ? sentence.text : `“${sentence.text}”`;
+      // An inline span (not <button>) so long sentences wrap like text; role/tabindex keep it keyboard-usable.
+      const btn = el("span", { className: `sent${sentence.quote ? " quote" : ""}`, title: "Show this in the graph", tabIndex: 0 }, text);
+      btn.setAttribute("role", "button");
+      const show = () => {
+        const node = data.byId.get(sentence.event_node);
+        if (!node) return;
+        $("graph").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+        select(node);
+      };
+      btn.addEventListener("click", show);
+      btn.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); show(); } });
+      p.append(btn, cite(sentence.article_id), " ");
+    }
+    return p;
+  });
+
+  box.replaceChildren(
+    el("h2", { id: "summary-title" }, "What happened"),
+    el("p", { className: "muted intro" }, intro),
+    ...body,
+    el("p", { className: "muted small" }, "Written from the articles' own headlines and sentences (not AI-generated). Click a sentence to find it in the graph."),
+    el("h3", {}, `Sources (${data.sources.length})`),
+    el("ol", { className: "sources" }, data.sources.map((src) => {
+      const href = safeUrl(src.url);
+      return el("li", {}, href ? el("a", { href, target: "_blank", rel: "noopener noreferrer" }, src.title || "Untitled", " ↗") : (src.title || "Untitled"),
+        el("span", { className: "muted" }, ` — ${src.publisher || "source"}, ${fmtDate(src.date)}`));
+    })),
+  );
+  box.classList.remove("hidden");
 }
 
 function linkTooltip(link) {
@@ -375,7 +433,7 @@ function showOverview() {
   const first = events[0], last = events[events.length - 1];
 
   const story = el("div", { className: "story" },
-    el("p", {}, `${plural(events.length, "event")}${first?.date ? ` from ${fmtDate(first.date)} to ${fmtDate(last.date)}` : ""}, drawn from ${plural(data.sources.length, "news article")} (listed under Sources).`));
+    el("p", {}, `${plural(events.length, "event")}${first?.date ? ` from ${fmtDate(first.date)} to ${fmtDate(last.date)}` : ""}, from ${plural(data.sources.length, "source")}.`));
   if (top.length) {
     const p = el("p", {}, "Most connected: ");
     top.forEach(([node, count], i) => {
@@ -402,21 +460,11 @@ function showOverview() {
   }
 
   $("panel").replaceChildren(
-    el("h2", {}, "The story"),
+    el("h2", {}, "Details"),
+    el("p", { className: "muted" }, "Click a dot or a line in the graph to see what it is, why it's connected, and its sources."),
     story,
-    ...section("How to read the graph",
-      el("ul", { className: "how" },
-        el("li", {}, "A line from an event to a person, organisation or place means they are named in the sentence the event was taken from."),
-        el("li", {}, "A ring is a topic; a line to it means the event is about that subject."),
-        el("li", {}, "A blue arrow points from an earlier event to a later one in the same story. ", CAVEAT),
-        el("li", {}, "Hover a line to see why it exists; click it for the full explanation and its sources."))),
-    ...section(`Events, oldest first (${events.length})`, el("ul", { className: "event-list" }, events.map((n) => eventItem(n)))),
-    ...section(`Sources (${data.sources.length})`, el("ol", { className: "sources" }, data.sources.map((s) => {
-      const href = safeUrl(s.url);
-      const count = events.filter((e) => e.article_id === s.id).length;
-      return el("li", {}, href ? el("a", { href, target: "_blank", rel: "noopener noreferrer" }, s.title || "Untitled", " ↗") : (s.title || "Untitled"),
-        el("span", { className: "muted" }, ` — ${s.publisher || "source"}, ${fmtDate(s.date)} · ${plural(count, "event")}`));
-    }))),
+    el("details", {}, el("summary", {}, `All ${plural(events.length, "event")}, oldest first`),
+      el("ul", { className: "event-list" }, events.map((n) => eventItem(n)))),
   );
 }
 
