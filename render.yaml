@@ -18,8 +18,10 @@ services:
         sync: false
       - key: NEO4J_PASSWORD
         sync: false
+      # Aura names the database after the instance id (NEO4J_DATABASE in the Aura credentials file),
+      # not "neo4j". A wrong name makes /health return 503, and Render then never finishes the deploy.
       - key: NEO4J_DATABASE
-        value: neo4j
+        sync: false
       # Comma-separated client keys. Render generates the first one; read it in the dashboard.
       - key: API_KEYS
         generateValue: true
