@@ -9,7 +9,7 @@
   --accent-soft: #e8efff;
   --focus: #93b4ff;
   --error: #b42318;
-  --edge: rgba(60, 64, 67, 0.22);
+  --edge: rgba(60, 64, 67, 0.45);
   --k-event: #64748b;
   --k-person: #db2777;
   --k-org: #2563eb;
@@ -39,7 +39,7 @@
     --accent-soft: #1e2a44;
     --focus: #4b6fd1;
     --error: #ff8a80;
-    --edge: rgba(200, 205, 215, 0.18);
+    --edge: rgba(200, 205, 215, 0.38);
     --k-event: #94a3b8;
     --k-person: #f472b6;
     --k-org: #7aa2ff;
