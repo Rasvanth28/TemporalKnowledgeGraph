@@ -28,14 +28,27 @@ GitHub Actions (daily 06:17 UTC)                       Render (Docker web servic
 
 ### Web UI ("Storyline")
 
-The API serves a small browser UI at `/` (`graphdb/static/`, plain HTML/CSS/JS, no build step). Pick a person,
-organisation, topic or date range to see its events as a timeline. Each event shows the source headline and
-link and the events it led to / follows from, with the reason in plain words. Search URLs are shareable
-(`/?entity=Bank%20of%20England`).
+The API serves a browser UI at `/` (`graphdb/static/`, plain HTML/CSS/JS, no build step). Type a question
+("How did UK interest rates change in 2024?") and the matching part of the knowledge graph is drawn as an
+interactive force-directed graph: events, people/organisations/places and topics, with event→event
+"led to" links. Hover to highlight a node's neighbours; click for details (headline link, date, connections).
+The panel also lists the graph's events in date order. Search URLs are shareable (`/?q=...`).
 
-- Same origin as the API, so no CORS setup is needed.
+**How a prompt becomes a graph** (`graphdb/search.py`, endpoint `GET /graph?q=`), with no LLM and no external service:
+
+1. **Names:** fuzzy-matched against entity names that exist in the graph (typos are OK; short acronyms like UK must be capitals).
+2. **Dates:** "in 2024", "June 2024", "since March", "last 3 months", "between X and Y", "Q3 2024".
+3. **Keywords:** what is left, matched with a Neo4j full-text index (English stemming).
+4. **Meaning:** the prompt is embedded locally (model2vec `potion-base-8M`, about 30 MB, CPU) and matched against event
+   embeddings in a Neo4j vector index, so "who drove UK borrowing costs?" finds rate decisions. Off-topic prompts
+   return an empty graph instead of the nearest noise (thresholds calibrated in `graphdb/search.py`).
+
+The results are merged with reciprocal-rank fusion and filtered by the date range. The UI shows what was understood
+(names, dates, keywords) so results are explainable. Ingestion maintains the indexes and embeds new events
+(`python -m graphdb.search_index` does the same by hand).
+
+- Same origin as the API, so no CORS setup is needed. The graph library (force-graph, MIT) is vendored in `graphdb/static/vendor/`.
 - On first visit it asks for an API key (one of `API_KEYS`), stored only in that browser's localStorage.
-  Anyone you give the URL and a key can read the graph; rotate keys as in the runbook below.
 - Locally: `API_KEYS=dev .venv/bin/uvicorn graphdb.api:app --port 8000`, open http://localhost:8000 and enter `dev`.
 
 ### First deployment

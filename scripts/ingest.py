@@ -34,7 +34,9 @@ def main(argv: list[str] | None = None) -> int:
     from graphdb.config import ConfigurationError, load_neo4j_config
     from graphdb.connection import Neo4jClient
     from graphdb.export import export_event_keys, write_event_keys_csv
+    from graphdb.search_index import embed_missing_events, ensure_search_indexes
     from graphdb.writer import PipelineWriter
+    from common.embed import get_embedder
 
     api_key = os.environ.get("GUARDIAN_API_KEY", "")
     try:
@@ -60,6 +62,12 @@ def main(argv: list[str] | None = None) -> int:
             if summary.written:
                 keys = write_event_keys_csv(export_event_keys(client), out_dir / "event_keys.csv")
                 log.info("exported event keys", extra={"fields": {"rows": keys, "path": str(out_dir / "event_keys.csv")}})
+            # Every non-dry run, even with nothing new: this is also the backfill for older events.
+            embedder = None if args.dry_run else get_embedder()
+            if embedder is not None:
+                ensure_search_indexes(client, embedder.dims)
+                embedded = embed_missing_events(client, embedder)
+                log.info("search index updated", extra={"fields": {"embedded": embedded}})
     except Exception:
         log.exception("ingest failed")
         return 2

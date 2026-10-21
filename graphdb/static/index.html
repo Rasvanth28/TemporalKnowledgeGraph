@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Storyline · Temporal Knowledge Graph</title>
-  <meta name="description" content="Follow how a news story unfolds over time.">
+  <meta name="description" content="Ask about the news and explore it as a connected graph.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='8' cy='16' r='5' fill='%232563eb'/><circle cx='24' cy='8' r='4' fill='%232563eb'/><circle cx='24' cy='24' r='4' fill='%232563eb'/><path d='M12 14 21 9M12 18l9 5' stroke='%232563eb' stroke-width='2'/></svg>">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -19,52 +19,40 @@
 
   <main>
     <section class="hero">
-      <h1>Follow a story through time</h1>
-      <p class="lede">News doesn't happen in isolation. Pick a person, organisation or topic to see what happened, in order, and which events led to which.</p>
-
-      <form id="search" class="search" autocomplete="off">
-        <div class="modes" role="radiogroup" aria-label="Search by">
-          <label><input type="radio" name="mode" value="entity" checked> Who / what</label>
-          <label><input type="radio" name="mode" value="topic"> Topic</label>
-          <label><input type="radio" name="mode" value="dates"> Dates</label>
-        </div>
-        <div class="search-row" id="text-row">
-          <input id="query" name="query" type="search" placeholder="e.g. Bank of England" aria-label="Search" required>
-          <button type="submit">Show story</button>
-        </div>
-        <div class="search-row hidden" id="date-row">
-          <label>From <input id="start" type="date"></label>
-          <label>To <input id="end" type="date"></label>
-          <button type="submit">Show story</button>
-        </div>
+      <h1>Ask about the news, see how it connects</h1>
+      <form id="ask" class="ask" autocomplete="off">
+        <label for="prompt" class="visually-hidden">Ask a question</label>
+        <input id="prompt" type="search" maxlength="500" required
+               placeholder="e.g. How did UK interest rates change in 2024?">
+        <button type="submit">Explore</button>
       </form>
-
-      <div id="suggestions" class="suggestions" aria-live="polite"></div>
+      <div id="examples" class="examples" aria-label="Example questions"></div>
     </section>
 
+    <section id="understood" class="understood hidden" aria-live="polite"></section>
     <section id="status" class="status hidden" role="status"></section>
 
-    <section id="results" class="hidden">
-      <div class="results-head">
-        <div>
-          <h2 id="results-title"></h2>
-          <p id="results-meta" class="muted"></p>
+    <section id="workspace" class="workspace hidden">
+      <div class="graph-wrap">
+        <div id="graph" class="graph" role="img" aria-label="Graph of events, people, organisations and topics. The list beside it has the same events."></div>
+        <div class="graph-tools">
+          <button type="button" class="ghost small" id="fit">Fit</button>
         </div>
-        <label class="strength">
-          Connections shown
-          <select id="strength">
-            <option value="0">All</option>
-            <option value="0.4">Medium and strong</option>
-            <option value="0.55">Strong only</option>
-          </select>
-        </label>
+        <ul class="legend" aria-label="Legend">
+          <li><span class="swatch" style="--c: var(--k-event)"></span>Event</li>
+          <li><span class="swatch" style="--c: var(--k-person)"></span>Person</li>
+          <li><span class="swatch" style="--c: var(--k-org)"></span>Organisation</li>
+          <li><span class="swatch" style="--c: var(--k-location)"></span>Place</li>
+          <li><span class="swatch ring" style="--c: var(--k-topic)"></span>Topic</li>
+          <li><span class="line"></span>Led to</li>
+        </ul>
       </div>
-      <ol id="timeline" class="timeline"></ol>
+      <aside id="panel" class="panel" aria-live="polite"></aside>
     </section>
   </main>
 
   <footer class="footer muted">
-    Events are extracted automatically from news articles, so wording can be rough and some links will be wrong.
+    Events are extracted automatically from news articles, so wording can be rough and some connections will be wrong.
     Article text © its publisher; follow the links to read the originals.
   </footer>
 
@@ -82,6 +70,7 @@
     </form>
   </dialog>
 
+  <script src="vendor/force-graph-1.49.6.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
