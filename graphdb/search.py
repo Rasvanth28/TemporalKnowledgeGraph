@@ -55,6 +55,7 @@ their theirs them themselves then there these they this those through to too und
 what when where which while who whom why will with would you your yours yourself yourselves news happen happened
 happening change changed changes story stories event events give list find anything everything something
 say says said tell told know think going get got make made
+drove drive driving driven cause caused causing affect affected affecting impact impacted lead led behind
 """.split())
 
 MONTHS = {name.lower(): i for i, name in enumerate(calendar.month_name) if name}
@@ -276,6 +277,22 @@ RETURN e.id AS id, e.description AS description, toString(e.date) AS date, e.typ
        [x IN collect(DISTINCT t.name) WHERE x IS NOT NULL AND x <> 'general'] AS topics
 """
 
+_COVERAGE = """
+UNWIND $ids AS id
+MATCH (e:Event {id: id})
+OPTIONAL MATCH (e)-[:INVOLVES]->(n:Entity)
+RETURN e.id AS id, coalesce(e.description, '') + ' ' + coalesce(e.source_text, '') AS text, collect(n.id) AS entity_ids
+"""
+
+
+def _coverage(client: Neo4jClient, event_ids: list[str], meaning: Interpretation) -> dict[str, tuple[bool, list[str]]]:
+    if not event_ids or not (meaning.entities or meaning.keywords):
+        return {}  # date-only (or empty) questions: everything in range answers them
+    names = {e["id"]: e["name"] for e in meaning.entities}
+    return {row["id"]: answers_directly(names, meaning.keywords, set(row["entity_ids"]), row["text"])
+            for row in client.run(_COVERAGE, {"ids": event_ids})}
+
+
 _SUBGRAPH_LINKS = """
 MATCH (a:Event)-[r:LINKED_TO]->(b:Event)
 WHERE a.id IN $ids AND b.id IN $ids
@@ -332,7 +349,10 @@ def search_graph(client: Neo4jClient, prompt: str, embedder: Embedder | None = N
     if not any(rankings.values()) and (meaning.start or meaning.end):
         rankings["date"] = _ids(client.run(_BY_DATE_ONLY, {**dates, "k": limit}))
 
-    ranked = fuse(rankings)[:limit]
+    fused = fuse(rankings)[:max(limit * 3, 60)]
+    coverage = _coverage(client, [event_id for event_id, _ in fused], meaning)
+    # Events that answer the whole question first; partial ("related") matches after them.
+    ranked = sorted(fused, key=lambda item: (not coverage.get(item[0], (False, []))[0], -item[1]))[:limit]
     graph = build_graph(client, [event_id for event_id, _ in ranked], {e["id"] for e in meaning.entities})
     relevance = dict(ranked)
     found_by = {source: set(ids) for source, ids in rankings.items()}
@@ -347,13 +367,18 @@ def search_graph(client: Neo4jClient, prompt: str, embedder: Embedder | None = N
             continue
         node["relevance"] = round(relevance.get(node["event_id"], 0.0) * RRF_K, 3)
         # Why this event is in the results, in terms the UI can explain.
+        direct, missing = coverage.get(node["event_id"], (True, []))
+        node["match"] = "direct" if direct else "related"
         node["why"] = {
+            "missing": missing,
             "names": [names[n] for n in involved.get(node["id"], [])],
             "keywords": keyword_hits(meaning.keywords, f"{node['label']} {node.get('evidence') or ''}")
             if node["event_id"] in found_by.get("keyword", ()) else [],
             "meaning": node["event_id"] in found_by.get("meaning", ()),
             "in_date_range": bool(meaning.start or meaning.end),
         }
+    events = [node for node in graph["nodes"] if node["kind"] == "event"]
+    direct_events = [node for node in events if node["match"] == "direct"]
     return {
         "query": prompt,
         "interpretation": {
@@ -362,7 +387,9 @@ def search_graph(client: Neo4jClient, prompt: str, embedder: Embedder | None = N
             "keywords": meaning.keywords, "semantic": embedder is not None,
         },
         **graph,
-        "summary": build_summary(graph["nodes"], graph["sources"]),
+        "coverage": {"direct": len(direct_events), "related": len(events) - len(direct_events)},
+        # Summarise the direct answers when there are any, so related news doesn't pose as the answer.
+        "summary": build_summary(direct_events or events, graph["sources"]),
     }
 
 
@@ -419,7 +446,56 @@ def evidence_quote(text: str | None) -> str | None:
     return text if len(text) <= EVIDENCE_CHARS else text[:EVIDENCE_CHARS - 1].rsplit(" ", 1)[0] + "…"
 
 
-def keyword_hits(keywords: list[str], text: str | None) -> list[str]:
-    # Rough stem match ("rates" ~ "rate", "decided" ~ "decide"); only used to explain results.
+# Everyday news words that mean the same thing for search ("gas price" should match "petrol costs").
+# Deliberately small: each entry widens what counts as a direct answer.
+RELATED_TERMS = {
+    "gas": {"petrol", "gasoline", "fuel"}, "petrol": {"gas", "gasoline", "fuel"}, "gasoline": {"gas", "petrol", "fuel"},
+    "fuel": {"petrol", "gasoline", "diesel"}, "price": {"cost", "pricing"}, "cost": {"price", "pricing"},
+    "oil": {"crude", "petroleum", "brent"}, "crude": {"oil", "brent"}, "rate": {"rates"},
+    "job": {"employment", "unemployment", "jobless"}, "unemployment": {"jobless", "employment"},
+    "election": {"vote", "poll", "ballot"}, "war": {"conflict", "fighting", "invasion"},
+    "tax": {"taxes", "levy", "duty"}, "mortgage": {"mortgages", "home loan"},
+}
+
+
+def stem(word: str) -> str:
+    word = word.lower()
+    if word.endswith("ies") and len(word) > 4:
+        return word[:-3] + "y"
+    if word.endswith("ing") and len(word) > 5:
+        return word[:-3]
+    if word.endswith("ed") and len(word) > 4:
+        return word[:-2]
+    if word.endswith("s") and not word.endswith("ss") and len(word) > 3:
+        return word[:-1]
+    return word
+
+
+def term_forms(keyword: str) -> set[str]:
+    base = stem(keyword)
+    return {base} | {stem(t) for t in RELATED_TERMS.get(base, set()) | RELATED_TERMS.get(keyword.lower(), set())}
+
+
+def term_covered(keyword: str, text: str | None) -> bool:
     lowered = (text or "").lower()
-    return [k for k in keywords if re.sub(r"(ies|es|s|ed|ing)$", "", k)[:6] in lowered]
+    return any(re.search(rf"\b{re.escape(form)}", lowered) for form in term_forms(keyword))
+
+
+def keyword_hits(keywords: list[str], text: str | None) -> list[str]:
+    return [k for k in keywords if term_covered(k, text)]
+
+
+def answers_directly(entity_names: dict[str, str], keywords: list[str], involved: set[str], text: str) -> tuple[bool, list[str]]:
+    """Does an event answer the whole question? Returns (direct, parts it does not cover).
+
+    Every name asked about must be involved (or named in the text). Topic words: with names, at least
+    one must be covered (the names already pin the subject); without names, at least half of them.
+    """
+
+    lowered = (text or "").lower()
+    missing = [name for entity_id, name in entity_names.items() if entity_id not in involved and name.lower() not in lowered]
+    hits = keyword_hits(keywords, lowered)
+    missing_terms = [k for k in keywords if k not in hits]
+    needed = 1 if entity_names else (len(keywords) + 1) // 2
+    direct = not missing and (not keywords or len(hits) >= needed)
+    return direct, missing + (missing_terms if len(hits) < needed else [])

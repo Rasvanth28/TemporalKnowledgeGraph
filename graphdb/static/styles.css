@@ -198,3 +198,7 @@ blockquote { margin: 0.3rem 0; padding: 0.4rem 0.75rem; border-left: 3px solid v
 .sent.quote { color: var(--muted); }
 .panel details { margin-top: 0.9rem; }
 .panel details > summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+
+/* direct-answer coverage note */
+.status.note-ok { border-left: 4px solid var(--k-location); }
+.status.note-warn { border-left: 4px solid var(--k-policy); }

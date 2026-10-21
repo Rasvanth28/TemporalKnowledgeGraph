@@ -149,6 +149,7 @@ class GraphModel(BaseModel):
     edges: list[GraphEdgeModel] = Field(default_factory=list)
     sources: list[SourceModel] = Field(default_factory=list)
     summary: dict[str, Any] = Field(default_factory=dict)
+    coverage: dict[str, int] = Field(default_factory=dict)
 
 
 class Neo4jHealthModel(BaseModel):
