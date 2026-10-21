@@ -74,3 +74,16 @@ def test_off_topic_prompts_return_an_empty_graph_not_noise(client):
     for prompt in ["zzqx florp", "recipe for chocolate cake"]:
         result = search_graph(client, prompt, get_embedder())
         assert result["nodes"] == [] and result["edges"] == [], prompt
+
+
+def test_search_still_works_before_search_indexes_exist():
+    # Fresh deploy: ingestion has not created the full-text/vector indexes yet.
+    with Neo4jClient(load_neo4j_config()) as neo4j:
+        extractor = SpacyExtractor()
+        i, t, d, text = ARTICLES[0]
+        result = extractor.extract(Article(i, t, d, "test", "u"), text)
+        PipelineWriter(neo4j).write(PipelineOutput(results=[result]))
+        for name in ("event_text", "event_embedding"):
+            neo4j.run(f"DROP INDEX {name} IF EXISTS")
+        found = search_graph(neo4j, "Bank of England interest rates", get_embedder())
+        assert "Bank of England" in labels(found, "entity")

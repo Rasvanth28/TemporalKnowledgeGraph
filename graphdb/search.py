@@ -18,15 +18,19 @@ from __future__ import annotations
 
 import calendar
 import datetime as dt
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from neo4j.exceptions import ClientError
 from rapidfuzz import fuzz
 
 from common.embed import Embedder
 from graphdb.connection import Neo4jClient
 from graphdb.search_index import EVENT_TEXT_INDEX, EVENT_VECTOR_INDEX
+
+log = logging.getLogger(__name__)
 
 DEFAULT_EVENTS = 30
 MAX_EVENTS = 100
@@ -281,6 +285,16 @@ def _ids(rows: list[dict[str, Any]]) -> list[str]:
     return [str(row["id"]) for row in rows if row.get("id")]
 
 
+def _optional(client: Neo4jClient, query: str, params: dict[str, Any], what: str) -> list[dict[str, Any]]:
+    # The full-text/vector indexes are created by ingestion. Until they exist (fresh deploy), skip that
+    # retriever instead of failing the whole search: name matching still works.
+    try:
+        return client.run(query, params)
+    except ClientError as exc:
+        log.warning("search index unavailable, skipping", extra={"fields": {"retriever": what, "error": exc.code}})
+        return []
+
+
 def meaning_cutoff(scores: list[float], lexical_hits: bool) -> float:
     if not scores:
         return MIN_VECTOR_SCORE
@@ -307,10 +321,10 @@ def search_graph(client: Neo4jClient, prompt: str, embedder: Embedder | None = N
     if meaning.entities:
         rankings["entity"] = _ids(client.run(_BY_ENTITY, {**dates, "ids": [e["id"] for e in meaning.entities], "k": k}))
     if meaning.keywords:
-        rankings["keyword"] = _ids(client.run(_BY_KEYWORD, {**dates, "q": lucene_query(meaning.keywords), "k": k}))
+        rankings["keyword"] = _ids(_optional(client, _BY_KEYWORD, {**dates, "q": lucene_query(meaning.keywords), "k": k}, "keyword"))
     if embedder is not None:
         vector = embedder.encode([prompt])[0]
-        rows = client.run(_BY_MEANING, {**dates, "vector": vector, "k": k, "min_score": MIN_VECTOR_SCORE})
+        rows = _optional(client, _BY_MEANING, {**dates, "vector": vector, "k": k, "min_score": MIN_VECTOR_SCORE}, "meaning")
         cutoff = meaning_cutoff([r["score"] for r in rows], any(rankings.values()))
         rankings["meaning"] = [str(r["id"]) for r in rows if r["score"] >= cutoff]
     if not any(rankings.values()) and (meaning.start or meaning.end):
