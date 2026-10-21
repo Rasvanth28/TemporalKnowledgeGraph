@@ -1,39 +1,43 @@
 # Session handoff — Research/RMI lane
 
 - **Last updated:** 2026-10-19
-- **Branch:** `feature/rmi-core`
-- **Stage:** C1 complete and about to be checkpointed. C2 next. C4 blocked.
+- **Branch:** `feature/rmi-drift`
+- **Stage:** C1 PR #13, C2 PR #14, and C3 PR #15 are open. C4 is blocked.
 
 ## Current status
 
-- `rmi/` core is implemented: config, synthetic keys, two-stage model, error-bounded lookup, training.
-- `29` unit tests pass; no Neo4j is required.
-- Person B PRs #8–#12 are open and not merged; C1 was branched from `origin/main`, not from them.
-- C4 (live Neo4j benchmark) is blocked until Person B merges and Aura `.env` exists.
+- RMI core, benchmark harness, and update-drift experiment are implemented and tested.
+- `39` unit tests pass; no Neo4j is required.
+- Person B PRs #8–#12 remain open; C branches are stacked on C1/C2, not on Person B branches.
+- C4 is blocked until Person B merges and Aura `.env` exists.
 
 ## Last verified state
 
-- Base: `origin/main` at `b0d9f08`.
+- C1 commit: `ffc2b06` on `feature/rmi-core`; PR #13 open against `main`.
+- C2 commit: `e0f8d1f` on `feature/rmi-benchmark`; PR #14 open against `feature/rmi-core`.
+- C3 commit: `12a0f5b` on `feature/rmi-drift`; PR #15 open against `feature/rmi-benchmark`.
+- C3 files: `rmi/drift.py`, `rmi/tests/test_drift.py`.
 - `python -m compileall -q rmi`: exit 0.
-- `pytest rmi/tests -q`: 29 passed.
-- All training keys found for uniform and clustered distributions and linear/constant model choices.
-- No shared file modified; no `graphdb` import exists in `rmi/`.
+- `pytest rmi/tests -q`: 39 passed.
+- Uniform drift: before 0 correct / 500 fallbacks; after 500 correct / 0 fallbacks; retrain 3.8 ms.
+- Clustered drift: before 0 / 500; after 500 / 0; retrain 4.9 ms.
+- C2 synthetic benchmark: RMI slower than the in-process `bisect` stand-in; recorded as a real negative
+  independent result, not the final Neo4j B+tree comparison.
 
 ## Next step
 
-1. Checkpoint C1: commit, push, open PR C1 with base `main`.
-2. Start C2 on `feature/rmi-benchmark`: benchmark harness with an injected fallback, same query set,
-   latency/correctness results, tests.
-3. Then C3: `retrain_rmi()` drift experiment and `RESULTS.md` draft.
-4. Do not start C4 until Person B PRs #8–#12 merge and Aura exists.
+1. Stop here. C1–C3 are open; C4 is blocked.
+2. Wait for Person B PRs #8–#12 to merge and for Aura `.env` to exist.
+3. Then create `feature/rmi-neo4j-integration` from updated `main`, wire `graphdb.queries`, run the live
+   benchmark, and finalize `RESULTS.md`. See [PR-C4 draft](pr/PR-C4-rmi-neo4j-integration.md).
 
 ## Open questions
 
-- Is the real exported `date_key` distribution close to uniform or clustered?
-- Should the final benchmark measure exact-key lookup only, or range-query latency as well?
-- When Person B merges, will the fallback adapter need range-to-key translation?
-- Root `RESULTS.md` will be proposed at consolidation; the draft lives in this folder meanwhile.
+- The real exported `date_key` distribution may differ from synthetic uniform/clustered.
+- The final benchmark may need range-query latency in addition to exact-key latency.
+- The C4 adapter must map Person B's range-query API to the exact-key benchmark contract.
+- Root `RESULTS.md` will be proposed at consolidation; the draft is in this folder.
 
 ## Uncommitted work
 
-All C1 files are uncommitted on `feature/rmi-core`. Nothing is staged yet.
+C3 files and documentation are uncommitted on `feature/rmi-drift`. Nothing is staged yet.

@@ -18,6 +18,7 @@
 .\.venv\Scripts\python.exe -m pytest rmi/tests -q
 .\.venv\Scripts\python.exe -m compileall -q rmi
 .\.venv\Scripts\python.exe -m rmi.train --keys 10000 --distribution uniform --seed 42
+.\.venv\Scripts\python.exe -m rmi.benchmark --keys 10000 --queries 2000 --distribution uniform --seed 42 --repeats 3
 ```
 
 ## 3. C1 results
@@ -49,7 +50,52 @@ clustered ('constant', 'constant') 500/500 found
 clustered ('linear', 'constant')   500/500 found
 ```
 
-## 4. Test coverage
+## 4. C2 benchmark results (synthetic, independent)
+
+Uniform distribution, 10,000 keys, 2,000 queries, repeats=3:
+
+```text
+rmi_correct=2000, rmi_fallbacks=0, fallback_correct=2000
+rmi_median_ns=4400, rmi_p95_ns=5700
+fallback_median_ns=200, fallback_p95_ns=300
+speedup=0.045
+```
+
+Clustered distribution, same size:
+
+```text
+rmi_correct=2000, rmi_fallbacks=0, fallback_correct=2000
+rmi_median_ns=37600, rmi_p95_ns=84500
+fallback_median_ns=200, fallback_p95_ns=300
+speedup=0.005
+```
+
+Interpretation: the independent RMI is slower than the in-process `bisect` stand-in. That is a valid
+negative result for this synthetic setup and is not the final Neo4j B+ tree comparison. The live comparison
+belongs to C4 and is not claimed here.
+
+## 5. C3 update-drift results (synthetic)
+
+Uniform, initial=5,000 / new=500 / queries=500 / repeats=3:
+
+```text
+before retrain: rmi_correct=0, rmi_fallbacks=500, rmi_median_ns=600
+after retrain:  rmi_correct=500, rmi_fallbacks=0, rmi_median_ns=4700
+retrain_ns=3,806,200
+```
+
+Clustered, same size:
+
+```text
+before retrain: rmi_correct=0, rmi_fallbacks=500, rmi_median_ns=700
+after retrain:  rmi_correct=500, rmi_fallbacks=0, rmi_median_ns=87,300
+retrain_ns=4,862,200
+```
+
+Interpretation: one retrain recovered all out-of-range queries. Clustered keys answer more slowly after
+retraining, which is a model-quality limitation of the current two-stage linear design.
+
+## 6. Test coverage
 
 | Area | Tests |
 |---|---|
@@ -58,13 +104,13 @@ clustered ('linear', 'constant')   500/500 found
 | RMI model | All training keys found, bounded candidate count, out-of-range fallback, unseen in-range fallback, bucket clamping, summary, fit validation |
 | Training | Fitted model, idempotent retrain, CLI |
 
-## 5. Not executed
+## 7. Not executed
 
 - Benchmark versus live Neo4j B+ tree: C4, blocked by Person B PRs #8–#12 and Aura.
 - Real exported key distribution: blocked by Person B merge.
 - Docker Compose: not used by this lane.
 
-## 6. Evidence policy
+## 8. Evidence policy
 
 - Results are recorded from commands actually run.
 - Synthetic results are labelled synthetic.

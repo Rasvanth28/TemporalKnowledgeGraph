@@ -3,8 +3,9 @@
 - **Owner:** Person C (Research/RMI lane)
 - **Contribution id:** `person-c-rmi`
 - **Branch:** `feature/rmi-core`
-- **Current stage:** C1 — two-stage RMI core implemented and unit-tested. C2 and C3 are planned. C4 (live
-  Neo4j integration) is blocked until Person B's PRs #8–#12 merge and an Aura `.env` exists.
+- **Current stage:** C3 — update-drift experiment implemented and tested; synthetic before/after results
+  recorded. C4 (live Neo4j integration) is blocked until Person B's PRs #8–#12 merge and an Aura `.env`
+  exists.
 
 > This folder is the isolated documentation home for the Research/RMI lane. Code lives in `rmi/`.
 > No Person A or Person B file is edited without explicit approval.
@@ -30,8 +31,10 @@ index, while falling back to Neo4j whenever the learned prediction is out of ran
 | `rmi/keys.py` | **C1 complete** | Deterministic synthetic sorted uniform/clustered keys |
 | `rmi/model.py` | **C1 complete** | Two-stage RMI with stage-1 bucket routing and per-bucket error windows |
 | `rmi/train.py` | **C1 complete** | `train_rmi`, idempotent `retrain_rmi`, CLI summary |
-| Benchmark vs fallback | **C2 planned** | Injectable fallback; live Neo4j benchmark in C4 |
-| Update-drift experiment | **C3 planned** | Insert new keys outside training range, retrain, compare |
+| `rmi/fallback.py` | **C2 complete** | Injectable fallback contract; binary-search stand-in |
+| `rmi/benchmark.py` | **C2 complete** | Same-query-set RMI vs fallback latency and correctness harness |
+| Live Neo4j benchmark | **C4 blocked** | Needs Person B merged and Aura |
+| `rmi/drift.py` | **C3 complete** | Insert new keys outside training range, retrain once, compare before/after |
 | Neo4j integration | **C4 blocked** | Needs Person B PRs #8–#12 merged and Aura `.env` |
 | `RESULTS.md` | **Draft scaffold** | Filled by C2/C3 and finalized in C4 |
 
@@ -42,6 +45,8 @@ Inside `.venv`:
 ```powershell
 python -m pytest rmi/tests -q
 python -m rmi.train --keys 10000 --distribution uniform --seed 42
+python -m rmi.benchmark --keys 10000 --queries 2000 --distribution uniform --seed 42 --repeats 3
+python -m rmi.drift --initial-keys 5000 --new-keys 500 --queries 500 --seed 42 --repeats 3
 ```
 
 Configuration is environment-only:
@@ -72,10 +77,10 @@ propose them.
 
 | PR | Branch | Scope | Depends on |
 |---|---|---|---|
-| C1 | `feature/rmi-core` | RMI core, config, synthetic keys, tests | `main` only |
-| C2 | `feature/rmi-benchmark` | Benchmark harness with injectable fallback, tests | C1 merged (or stacked on C1) |
-| C3 | `feature/rmi-drift` | `retrain_rmi()` experiment, drift metrics, RESULTS draft | C2 merged (or stacked on C2) |
-| C4 | `feature/rmi-neo4j-integration` | Wire `graphdb.queries` fallback, live RMI vs B+tree benchmark, final RESULTS | **Person B PRs #8–#12 merged + Aura `.env`** |
+| C1 (#13) | `feature/rmi-core` | RMI core, config, synthetic keys, tests | `main` only |
+| C2 (#14) | `feature/rmi-benchmark` | Benchmark harness with injectable fallback, tests | C1 merged (or stacked on C1) |
+| C3 (#15) | `feature/rmi-drift` | `retrain_rmi()` experiment, drift metrics, RESULTS draft | C2 merged (or stacked on C2) |
+| C4 (blocked) | `feature/rmi-neo4j-integration` | Wire `graphdb.queries` fallback, live RMI vs B+tree benchmark, final RESULTS | **Person B PRs #8–#12 merged + Aura `.env`** |
 
 C1–C3 have no Person B dependency. Only C4 does.
 

@@ -20,6 +20,7 @@ from rmi.config import RMIConfig, RmiConfigError
 class NumericModel(Protocol):
     def fit(self, x: np.ndarray, y: np.ndarray) -> None: ...
     def predict(self, x: np.ndarray) -> np.ndarray: ...
+    def predict_scalar(self, value: float) -> float: ...
     def max_abs_error(self, x: np.ndarray, y: np.ndarray) -> float: ...
 
 
@@ -41,6 +42,9 @@ class LinearModel:
     def predict(self, x: np.ndarray) -> np.ndarray:
         return self.slope_ * np.asarray(x, dtype=float) + self.intercept_
 
+    def predict_scalar(self, value: float) -> float:
+        return self.slope_ * float(value) + self.intercept_
+
     def max_abs_error(self, x: np.ndarray, y: np.ndarray) -> float:
         if len(x) == 0:
             return 0.0
@@ -58,6 +62,9 @@ class ConstantModel:
     def predict(self, x: np.ndarray) -> np.ndarray:
         x = np.asarray(x)
         return np.full(x.shape, self.value_, dtype=float)
+
+    def predict_scalar(self, value: float) -> float:
+        return self.value_
 
     def max_abs_error(self, x: np.ndarray, y: np.ndarray) -> float:
         if len(x) == 0:
@@ -166,9 +173,7 @@ class RMIModel:
                 reason="out_of_range",
             )
 
-        predicted_norm = float(
-            np.clip(self.stage1.predict(np.array([key])), 0.0, 1.0)[0]
-        )
+        predicted_norm = min(max(self.stage1.predict_scalar(key), 0.0), 1.0)
         predicted_bucket = int(
             min(max(int(predicted_norm * self.bucket_count), 0), self.bucket_count - 1)
         )
@@ -181,7 +186,7 @@ class RMIModel:
         for bucket in range(first_bucket, last_bucket + 1):
             start = int(self.bucket_starts[bucket])
             end = int(self.bucket_ends[bucket])
-            local_prediction = float(self.stage2_models[bucket].predict(np.array([key]))[0])
+            local_prediction = self.stage2_models[bucket].predict_scalar(key)
             global_prediction = int(round(start + local_prediction))
             window = int(self.stage2_errors[bucket])
             search_start = max(start, global_prediction - window)
