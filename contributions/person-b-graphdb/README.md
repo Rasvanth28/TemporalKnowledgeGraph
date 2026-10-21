@@ -2,9 +2,9 @@
 
 - **Owner:** Person B (Graph DB & Backend lane)
 - **Contribution id:** `person-b-graphdb`
-- **Branch:** `feature/graphdb-writer`
-- **Current stage:** Stage 2 — writer implemented and unit-tested; live Aura integration and Docker Compose
-  execution are still pending. The branch is stacked on the Stage 1 foundation PR.
+- **Branch:** `feature/graphdb-export-e2e`
+- **Current stage:** Stages 0–6 implemented and unit-tested; five stacked PRs are open (#8–#12). Live Aura
+  verification and Docker Compose execution are still pending.
 
 > This folder is the isolated documentation home for the Graph DB & Backend lane. Code for the lane lives
 > in `graphdb/`. Shared project files are not edited from this folder unless the owner explicitly approves
@@ -46,17 +46,21 @@ and local workflow needed to build it without drifting into shared files.
 | `graphdb/apply_schema.py` | **Stage 1 implemented** | Rerunnable, equivalent-index handling, `--verify-only` |
 | `graphdb/writer.py` | **Stage 2 implemented; Aura pending** | Idempotent `MERGE`/`UNWIND`, endpoint validation, counts, latest-input-wins `LINKED_TO`, global `PRECEDES` rebuild |
 | Synthetic writer fixture | **Stage 2 implemented** | `graphdb/tests/fixtures/pipeline_output.json`; original test-only text, no spaCy or Guardian dependency |
-| `graphdb/queries.py` | **Planned for Stage 3** | Entity/date/topic chains plus flat lookup helpers |
-| `graphdb/api.py` | **Planned for Stage 4** | FastAPI, Pydantic models, OpenAPI, curl/Postman examples |
-| Graph-to-flat export | **Planned for Stage 5** | Same columns and `date_key` contract as `pipeline/export.py` |
-| End-to-end round-trip | **Planned for Stage 6** | Synthetic test fixture plus official sample no-regression run |
+| `graphdb/queries.py` | **Stage 3 implemented; Aura pending** | Entity/date/topic chains, flat lookup helpers, depth/limit/confidence guards, chronological ordering |
+| `graphdb/normalize.py` | **Stage 3 implemented** | Backend copy of Person A's entity-name normalization; no spaCy import |
+| `graphdb/api.py` | **Stage 4 implemented; Aura pending** | FastAPI, Pydantic models, OpenAPI, health, query routes |
+| API contract and clients | **Stage 4 implemented** | `contributions/person-b-graphdb/api/` with contract, curl examples, and Postman collection |
+| Graph-to-flat export | **Stage 5 implemented; Aura pending** | Same columns and `date_key` contract as `pipeline/export.py` |
+| End-to-end round-trip | **Stage 6 prepared; Aura pending** | Synthetic fixture tests plus official sample no-regression test, both skipped without `NEO4J_URI` |
 
 ## Main files changed
 
-Stages 0–1:
+Stages 0–6:
 
-- `contributions/person-b-graphdb/` — this documentation set.
-- `graphdb/` — config, connection wrapper, health check, schema application, writer, CQL files, tests.
+- `contributions/person-b-graphdb/` — this documentation set, API contract/clients, PR descriptions, and
+  final audit.
+- `graphdb/` — config, connection wrapper, health check, schema application, writer, queries, normalizer,
+  API, export, CQL files, tests.
 - `requirements.txt` — six new installed/tested pins appended.
 - `.env.example` — Neo4j placeholders appended.
 - `docker-compose.yml` — local alternative, untested here.
@@ -77,6 +81,8 @@ python -m pip install -r requirements.txt
 python -m graphdb.health
 python -m graphdb.apply_schema
 python -m graphdb.writer --input data/exports/pipeline_output.json
+python -m graphdb.api
+python -m graphdb.export --output data/exports/graph_event_keys.csv
 python -m pytest
 ```
 
@@ -104,6 +110,10 @@ printed. [VERIFIED]
 - [PROPOSED_ROOT_README_SECTION.md](PROPOSED_ROOT_README_SECTION.md) — text for the eventual root README section.
 - [decisions/README.md](decisions/README.md) — ADR index and template.
 - [diagrams/architecture.md](diagrams/architecture.md) — Mermaid architecture diagram.
+- [api/API_CONTRACT.md](api/API_CONTRACT.md) — stable HTTP contract, models, limits, and errors.
+- [api/curl_examples.md](api/curl_examples.md) — curl examples for every endpoint.
+- [api/postman_collection.json](api/postman_collection.json) — importable Postman collection.
+- [FINAL_AUDIT.md](FINAL_AUDIT.md) — deliverables, verification matrix, PR map, limitations, and reviewer checklist.
 
 ### Decision records
 
@@ -120,6 +130,14 @@ printed. [VERIFIED]
   links behind. This is accepted for the MVP and tracked as a backlog item.
 - **The writer's live idempotency test is skipped** until a reachable Neo4j `.env` exists. The mocked
   validation/plan tests run without Neo4j.
+- **Index-usage evidence is pending.** The Stage 3 integration test checks that the date-range `EXPLAIN`
+  plan contains `event_date`; it cannot run without Aura.
+- **The case-insensitive entity fallback is a non-indexed scan.** It runs only when exact normalized
+  matching returns nothing.
+- **Live API verification is pending Aura.** API tests use an injected fake client; no endpoint has been
+  exercised against a real database yet.
+- `starlette.testclient` reports an `httpx` deprecation advisory under the current dependency set. It is a
+  warning, not an API failure.
 - **Global `PRECEDES` recomputation is a batch operation.** It is idempotent but will need care if the graph
   grows large or writes become highly concurrent.
 - **Docker Compose is untested** on this machine because Docker is unavailable in the shell.

@@ -227,3 +227,203 @@ regressions. The live idempotency proof remains pending a reachable Neo4j instan
 - [PR-0002](pr/PR-0002-graphdb-writer.md)
 
 **Next:** Stage 3 queries, index-usage evidence, and the stable RMI fallback contract.
+
+## 2026-10-19 — Stage 3: queries and fallback contract
+
+**Objective:** Implement the stable query contract for Person C and the future API: event lookup,
+date-range lookup, entity/date/topic chains, entity-name normalization, and index-evidence tooling.
+
+**Branch:** `feature/graphdb-queries`, stacked on `feature/graphdb-writer` because PR 1 and PR 2 are not
+merged yet.
+
+**Files created:**
+
+- `graphdb/queries.py`
+- `graphdb/normalize.py`
+- `graphdb/tests/test_normalize.py`
+- `graphdb/tests/test_queries_unit.py`
+- `graphdb/tests/test_queries_neo4j.py`
+- `contributions/person-b-graphdb/pr/PR-0003-graphdb-queries.md`
+
+**Files modified:**
+
+- `contributions/person-b-graphdb/README.md`
+- `contributions/person-b-graphdb/ARCHITECTURE.md`
+- `contributions/person-b-graphdb/IMPLEMENTATION_LOG.md`
+- `contributions/person-b-graphdb/TESTING.md`
+- `contributions/person-b-graphdb/SESSION_HANDOFF.md`
+
+**Reasoning:** Queries return plain dictionaries and use parameterized Cypher. Entity matching uses the
+exact normalized name so the `entity_name` index remains usable; the case-insensitive fallback is isolated
+and documented as a non-indexed scan. Chain traversal follows `LINKED_TO`, filters by `min_confidence`,
+caps depth at a code constant, limits results, and orders chronologically. `date_key` mirrors
+`pipeline/export.py`. `explain_events_in_date_range` exists specifically so the live integration test can
+record index evidence.
+
+**Alternatives considered:**
+
+- Case-insensitive `toLower` as the primary entity match: rejected because it prevents use of the required
+  index.
+- Importing `pipeline.extract.normalize_name`: rejected because it pulls spaCy into the backend; the small
+  copy is tested independently.
+- Parameterizing variable-length depth directly: rejected because Cypher range bounds are not parameters;
+  the code uses a constant cap plus a `length(path) <= $depth` filter.
+- Returning driver node/relationship objects: rejected by the stable-contract rule.
+
+**Checks run and results:**
+
+- `python -m compileall -q graphdb` — exit 0. [VERIFIED]
+- `pytest graphdb/tests -m "not integration" -q` — `48 passed, 3 deselected`. [VERIFIED]
+- `pytest -q` — `90 passed, 3 skipped`. [VERIFIED]
+- `pip check` — no broken requirements. [VERIFIED]
+- Live query round-trip and `EXPLAIN` index evidence — skipped without `NEO4J_URI`. [NOT EXECUTED]
+
+**Results and failures:** Unit coverage passes with no regressions. Query behavior against Neo4j and the
+`event_date` index plan remain unobserved until Aura is configured.
+
+**Links:**
+
+- [ADR-0004](decisions/ADR-0004-query-api-and-export-contracts.md)
+- [TESTING.md](TESTING.md)
+- [PR-0003](pr/PR-0003-graphdb-queries.md)
+
+**Next:** Stage 4 API proposal and implementation.
+
+## 2026-10-19 — Stage 4: FastAPI layer and client contract
+
+**Objective:** Expose the stable query contract through a thin, documented FastAPI layer with Pydantic
+response models, validation, `/health`, OpenAPI, curl examples, and a Postman collection.
+
+**Branch:** `feature/graphdb-api`, stacked on `feature/graphdb-queries` because the earlier PRs are not
+merged yet.
+
+**Files created:**
+
+- `graphdb/api.py`
+- `graphdb/tests/test_api.py`
+- `contributions/person-b-graphdb/api/API_CONTRACT.md`
+- `contributions/person-b-graphdb/api/curl_examples.md`
+- `contributions/person-b-graphdb/api/postman_collection.json`
+- `contributions/person-b-graphdb/pr/PR-0004-graphdb-api.md`
+
+**Files modified:**
+
+- `contributions/person-b-graphdb/README.md`
+- `contributions/person-b-graphdb/ARCHITECTURE.md`
+- `contributions/person-b-graphdb/IMPLEMENTATION_LOG.md`
+- `contributions/person-b-graphdb/TESTING.md`
+- `contributions/person-b-graphdb/SESSION_HANDOFF.md`
+- `contributions/person-b-graphdb/PROPOSED_ROOT_README_SECTION.md`
+
+**Reasoning:** Route handlers only validate and delegate to `graphdb.queries`, so the graph contract remains
+the single source of behavior. The app defers environment loading to startup, which lets tests inject a fake
+client without `.env`. Pydantic models document the stable response shape. The contract file records
+endpoints, limits, and errors before/alongside implementation, satisfying the early-review requirement while
+keeping the lane moving under the owner's blanket instruction to complete the work.
+
+**Alternatives considered:**
+
+- Postman-only API: rejected in ADR-0004.
+- Duplicating query logic in route handlers: rejected; it would split the stable contract.
+- Loading Neo4j config at import: rejected because it would break unit tests without `.env`.
+- Making the API return raw dicts: rejected; Pydantic response models keep the contract explicit.
+
+**Checks run and results:**
+
+- `python -m compileall -q graphdb` — exit 0. [VERIFIED]
+- `pytest graphdb/tests/test_api.py -q` — `10 passed`. [VERIFIED]
+- `pytest graphdb/tests -m "not integration" -q` — `58 passed, 3 deselected`. [VERIFIED]
+- `pytest -q` — `100 passed, 3 skipped, 1 warning`. [VERIFIED]
+- `pip check` — no broken requirements. [VERIFIED]
+- Postman collection JSON parses successfully. [VERIFIED]
+- Live API against Aura — not executed without `.env`. [NOT EXECUTED]
+
+**Results and failures:** API unit tests pass, including `/health`, event lookup, date range, entity/topic/
+date-range chains, 404, 422, and OpenAPI path checks. One Starlette/httpx deprecation warning is emitted by
+the test client dependency; it does not affect API behavior.
+
+**Links:**
+
+- [ADR-0004](decisions/ADR-0004-query-api-and-export-contracts.md)
+- [API contract](api/API_CONTRACT.md)
+- [TESTING.md](TESTING.md)
+- [PR-0004](pr/PR-0004-graphdb-api.md)
+
+**Next:** Stage 5 graph-to-flat export for Person C, then Stage 6 end-to-end integration and final audit.
+
+## 2026-10-19 — Stage 5: graph event-key export
+
+**Objective:** Export Person C's flat event-key dataset from the populated Neo4j graph, preserving the
+existing `pipeline/export.py` column and `date_key` contract.
+
+**Branch:** `feature/graphdb-export-e2e`, stacked on `feature/graphdb-api`.
+
+**Files created:**
+
+- `graphdb/export.py`
+- `graphdb/tests/test_export_unit.py`
+- `graphdb/tests/test_export_neo4j.py`
+
+**Reasoning:** The export reads `Event` nodes from Neo4j rather than re-reading the pipeline JSON, proving
+that the graph is populated. `date_key` is imported from `graphdb.queries` so graph and pipeline agree.
+`EVENT_KEY_COLUMNS` is asserted equal to `pipeline.export.EVENT_KEY_COLUMNS` in a unit test. Rows sort by
+`(date_key, event_id)`.
+
+**Alternatives considered:**
+
+- Re-exporting the pipeline CSV: rejected because it does not prove the graph round-trip.
+- Adding new columns for graph-specific fields: rejected because it would break Person C's contract.
+- Computing `date_key` separately in each module: rejected; one implementation reduces drift.
+
+**Checks run and results:**
+
+- `python -m compileall -q graphdb` — exit 0. [VERIFIED]
+- `pytest graphdb/tests/test_export_unit.py -q` — 6 passed. [VERIFIED]
+- `pytest graphdb/tests -m "not integration" -q` — 64 passed, 5 deselected. [VERIFIED]
+- Live graph export — skipped without `NEO4J_URI`. [NOT EXECUTED]
+
+## 2026-10-19 — Stage 6: end-to-end integration and final audit
+
+**Objective:** Prove or prepare the full path: official sample data → Person A's pipeline → writer → Neo4j
+→ query round-trip → graph export, and audit the entire lane.
+
+**Files created:**
+
+- `graphdb/tests/test_e2e_pipeline_neo4j.py`
+- `contributions/person-b-graphdb/FINAL_AUDIT.md`
+- `contributions/person-b-graphdb/pr/PR-0005-graphdb-export-e2e.md`
+
+**Files modified:**
+
+- `contributions/person-b-graphdb/README.md`
+- `contributions/person-b-graphdb/ARCHITECTURE.md`
+- `contributions/person-b-graphdb/IMPLEMENTATION_LOG.md`
+- `contributions/person-b-graphdb/TESTING.md`
+- `contributions/person-b-graphdb/SESSION_HANDOFF.md`
+- `contributions/person-b-graphdb/PROPOSED_ROOT_README_SECTION.md`
+
+**Reasoning:** The end-to-end test uses the official three-article sample, runs Person A's pipeline in
+process, writes to Neo4j, checks `event_by_id` and `events_in_date_range`, and compares graph export rows
+with the pipeline CSV. Cleanup uses the exact article/event/entity/topic set produced by that run, so the
+single Aura database is never wiped even though official sample ids are not `test_`-prefixed.
+
+**Checks run and results:**
+
+- `python -m compileall -q graphdb` — exit 0. [VERIFIED]
+- `pytest -q` — 106 passed, 5 skipped, 1 dependency warning. [VERIFIED]
+- `pip check` — no broken requirements. [VERIFIED]
+- Documentation link check — run during final audit. [VERIFIED]
+- Official sample end-to-end test — skipped without `NEO4J_URI`. [NOT EXECUTED]
+
+**Results and failures:** The lane is implementation-complete with strong mocked/unit coverage. Live
+Neo4j verification, Docker Compose execution, and live index evidence remain explicitly pending an owner-
+provided `.env`. [FINAL_AUDIT.md](FINAL_AUDIT.md) records the exact matrix.
+
+**Links:**
+
+- [ADR-0001](decisions/ADR-0001-neo4j-runtime-and-test-isolation.md) through [ADR-0004](decisions/ADR-0004-query-api-and-export-contracts.md)
+- [TESTING.md](TESTING.md)
+- [FINAL_AUDIT.md](FINAL_AUDIT.md)
+- [PR-0005](pr/PR-0005-graphdb-export-e2e.md)
+
+**Next:** Owner opens PRs in order, configures Aura locally, and records live evidence in `TESTING.md`.
