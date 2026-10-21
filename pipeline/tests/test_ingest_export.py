@@ -112,3 +112,16 @@ def test_fetch_article_by_url():
     assert fetch_article("key", "https://www.theguardian.com/business/7", session=ItemSession(404)) is None
     with pytest.raises(GuardianError):
         fetch_article("key", "https://example.com/not-guardian", session=session)
+
+
+def test_guardian_source_without_query_fetches_everything():
+    session = FakeSession([FakeResponse({"response": {"status": "ok", "pages": 1, "results": [guardian_item(1)]}})])
+    GuardianSource("key", "", max_articles=5, session=session).load()
+    assert "q" not in session.calls[0]
+
+
+def test_guardian_source_drops_items_repeated_across_pages():
+    pages = [FakeResponse({"response": {"status": "ok", "pages": 2, "results": [guardian_item(1), guardian_item(2)]}}),
+             FakeResponse({"response": {"status": "ok", "pages": 2, "results": [guardian_item(2), guardian_item(3)]}})]
+    raws = GuardianSource("key", "", max_articles=10, session=FakeSession(pages)).load()
+    assert [r.article.title for r in raws] == ["Headline 1", "Headline 2", "Headline 3"]

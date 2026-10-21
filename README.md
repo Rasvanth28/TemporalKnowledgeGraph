@@ -73,6 +73,33 @@ Quotes are single sentences (max 280 characters) shown with attribution and a li
 - On first visit it asks for an API key (one of `API_KEYS`), stored only in that browser's localStorage.
 - Locally: `API_KEYS=dev .venv/bin/uvicorn graphdb.api:app --port 8000`, open http://localhost:8000 and enter `dev`.
 
+### Data sources and capacity
+
+Configured in `config/ingest_queries.json`:
+
+| Source | What | Volume | Credit |
+|---|---|---|---|
+| The Guardian Open Platform | Every article (`"query": ""`), full text | ~170 / day | headline link to theguardian.com |
+| Wikipedia Current Events | Each dated news item from the daily portal page; one sentence citing its original reporting | ~15 / day | "Wikipedia Current Events (CC BY-SA 4.0) · original: Reuters, …", linked to the day page |
+
+**Rolling window.** Aura Free holds 200k nodes / 400k relationships, and an article costs ~20 nodes / ~53 relationships, so
+everything fills it in about six weeks. `retention_days: 30` deletes articles older than 30 days (and their events,
+then any entities/topics left with no relationships) at the start of every run; measured on real data, 30 days uses
+~76% of the plan. Articles with `pinned = true` are never deleted: `python -m scripts.pin_articles --id ID` or
+`--all-existing`.
+
+**Size guard.** Each run reports graph usage in its summary, logs a warning from 80%, and **refuses to write from 95%**
+(exit code 4, so the scheduled run fails and GitHub notifies). Limits are `graph_limits` in the config; raise them if
+you move to a bigger database (self-hosted Neo4j or Aura Professional).
+
+**Backfill.** `python -m scripts.ingest --since 2026-09-21`, or Actions → Ingest → Run workflow with *since*. Start
+dates before the retention window are clamped to it (there is no point fetching what the next run deletes).
+Measured: a 7-day backfill of everything (1,406 articles → 6,405 events, 6,285 links) takes ~4 minutes.
+
+**Linking at this scale.** A link needs a shared entity or topic similarity ≥ 0.2, so only those candidate pairs are
+scored (name index + one sparse TF-IDF product); this gives exactly the links of comparing every pair (tested), e.g.
+896 new events against 4,875 existing in 2.6 s.
+
 ### First deployment
 
 1. **GitHub secrets:** repo → Settings → Secrets and variables → Actions → add `GUARDIAN_API_KEY`, `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE` (the Aura values; Aura's database name is the instance id from its credentials file, **not** `neo4j`).
@@ -90,6 +117,8 @@ Quotes are single sentences (max 280 characters) shown with attribution and a li
 | Rotate Neo4j password | Change it in Aura, then update Render env and the GitHub secret `NEO4J_PASSWORD`. |
 | API returns 503 on `/health` / Render deploy never finishes | Read the `error` in the `/health` body. `DatabaseNotFound` means `NEO4J_DATABASE` is wrong (Aura uses the instance id). Otherwise Neo4j is unreachable: check the Aura console. Aura Free pauses idle instances; the daily ingestion keeps it active. |
 | Extraction changed (e.g. a date fix) and stored events are out of date | `python -m scripts.reextract --input data/guardian_articles.json` (dry run: prints what would change), then add `--apply`. Articles not in `--input` are re-fetched from the Guardian by URL. Safe to re-run: a second run reports 0 changes. |
+| Run failed with exit code 4 ("database full") | Nothing was written. Lower `retention_days` (or raise `graph_limits` after moving to a bigger database), then re-run. |
+| Keep some articles forever | `python -m scripts.pin_articles --id ID` (or `--all-existing`); retention skips pinned articles. |
 | Add a news topic | Add a query to `config/ingest_queries.json` via PR. New queries start from the newest article already in the graph. |
 
 **Limits to know:** Render Free sleeps after 15 min idle (first request about 30s); GitHub disables scheduled workflows after 60 days without repository activity; Aura Free caps the graph size (200k nodes / 400k relationships at the time of writing).

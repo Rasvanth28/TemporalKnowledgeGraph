@@ -48,7 +48,6 @@ class GuardianSource:
 
     def _params(self, page: int) -> dict:
         params = {
-            "q": self.query,
             "api-key": self.api_key,
             "show-fields": "headline,bodyText",
             "page-size": min(MAX_PAGE_SIZE, self.max_articles),
@@ -56,6 +55,8 @@ class GuardianSource:
             "order-by": self.order_by,
             "type": "article",
         }
+        if self.query:  # no query = every article in the window
+            params["q"] = self.query
         if self.from_date:
             params["from-date"] = self.from_date.isoformat()
         if self.to_date:
@@ -92,7 +93,7 @@ class GuardianSource:
         return RawArticle(article=article, text=text)
 
     def load(self) -> list[RawArticle]:
-        raws = []
+        raws, seen = [], set()
         page, pages, total = 1, 1, 0
         while page <= pages and len(raws) < self.max_articles:
             body = self._get(page)
@@ -100,7 +101,9 @@ class GuardianSource:
             total = body.get("total", 0)
             for item in body.get("results", []):
                 raw = self.parse_result(item)
-                if raw is not None:
+                # Pages can shift while paging (new articles published), repeating items.
+                if raw is not None and raw.article.id not in seen:
+                    seen.add(raw.article.id)
                     raws.append(raw)
             page += 1
         log.info("guardian fetch", extra={"fields": {"query": self.query, "articles": min(len(raws), self.max_articles), "available": total}})

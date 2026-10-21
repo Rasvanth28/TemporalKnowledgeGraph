@@ -12,6 +12,10 @@ on:
         description: "Extract and link, but do not write to Neo4j"
         type: boolean
         default: false
+      since:
+        description: "Backfill from this date (YYYY-MM-DD); clamped to the retention window. Empty = normal run"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -29,7 +33,7 @@ concurrency:
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120  # a 30-day backfill of everything is ~5k articles (~15 min extraction)
     env:
       LOG_FORMAT: json
       GUARDIAN_API_KEY: ${{ secrets.GUARDIAN_API_KEY }}
@@ -48,7 +52,17 @@ jobs:
       - name: Ensure schema (idempotent)
         run: python -m graphdb.apply_schema
       - name: Ingest
-        run: python -m scripts.ingest ${{ inputs.dry_run && '--dry-run' || '' }}
+        # Inputs go through env, never straight into the script (avoids shell injection);
+        # --since is parsed as an ISO date by Python, which rejects anything else.
+        # Exit 4 = database (nearly) full: the run fails so GitHub notifies, and nothing was written.
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          SINCE: ${{ inputs.since }}
+        run: |
+          args=()
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          if [ -n "$SINCE" ]; then args+=(--since "$SINCE"); fi
+          python -m scripts.ingest "${args[@]}"
       - name: Run summary
         if: always()
         run: |

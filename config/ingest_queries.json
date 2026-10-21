@@ -1,12 +1,13 @@
 {
-  "_comment": "Guardian search queries for scheduled ingestion. Quote phrases and join with AND: unquoted words match ANY word.",
-  "max_per_query": 100,
+  "_comment": "What scheduled ingestion collects. An empty Guardian query fetches every article. retention_days keeps a rolling window (unpinned articles older than this are deleted) so the graph stays inside graph_limits (Aura Free: 200k nodes / 400k relationships; everything is ~170 articles a day, ~20 nodes and ~53 relationships each).",
+  "max_per_query": 6000,
   "initial_days": 30,
   "overlap_days": 2,
-  "lookback_days": 90,
+  "lookback_days": 30,
+  "retention_days": 30,
+  "graph_limits": {"max_nodes": 200000, "max_relationships": 400000},
+  "wikipedia_current_events": true,
   "queries": [
-    {"query": "\"Bank of England\" AND \"interest rates\"", "section": "business"},
-    {"query": "Opec AND \"oil production\"", "section": "business"},
-    {"query": "\"Federal Reserve\" AND \"interest rates\"", "section": "business"}
+    {"query": "", "_label": "Everything published by The Guardian"}
   ]
 }
